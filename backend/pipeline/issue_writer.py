@@ -1,6 +1,6 @@
 """Biến transcript tiếng Việt -> draft Jira issue tiếng Anh (JSON).
 
-Dùng Gemini làm LLM chính, fallback sang Groq (llama) nếu thiếu key.
+Ưu tiên Gemini -> OpenAI (GPT) -> Groq (llama) tuỳ key nào có.
 """
 import json
 
@@ -68,10 +68,30 @@ def _call_groq(prompt: str) -> str:
     return resp.json()["choices"][0]["message"]["content"]
 
 
+def _call_openai(prompt: str) -> str:
+    resp = requests.post(
+        "https://api.openai.com/v1/chat/completions",
+        headers={"Authorization": f"Bearer {config.OPENAI_API_KEY}"},
+        json={
+            "model": config.OPENAI_MODEL,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.2,
+        },
+        timeout=120,
+    )
+    resp.raise_for_status()
+    return resp.json()["choices"][0]["message"]["content"]
+
+
 def write_issue(transcripts: dict) -> dict:
     prompt = ISSUE_PROMPT.format(transcripts=_format_transcripts(transcripts))
     try:
-        raw = _call_gemini(prompt) if config.GEMINI_API_KEY else _call_groq(prompt)
+        if config.GEMINI_API_KEY:
+            raw = _call_gemini(prompt)
+        elif config.OPENAI_API_KEY:
+            raw = _call_openai(prompt)
+        else:
+            raw = _call_groq(prompt)
         issue = _parse_json(raw)
     except Exception as e:
         issue = {

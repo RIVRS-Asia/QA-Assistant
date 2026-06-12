@@ -60,9 +60,28 @@ def transcribe_groq(audio_path: Path) -> str | None:
         return f"[groq lỗi: {e}]"
 
 
+def transcribe_openai(audio_path: Path) -> str | None:
+    if not config.OPENAI_API_KEY:
+        return None
+    try:
+        with open(audio_path, "rb") as f:
+            resp = requests.post(
+                "https://api.openai.com/v1/audio/transcriptions",
+                headers={"Authorization": f"Bearer {config.OPENAI_API_KEY}"},
+                files={"file": (audio_path.name, f, "audio/wav")},
+                data={"model": config.OPENAI_WHISPER_MODEL, "language": "vi"},
+                timeout=120,
+            )
+        resp.raise_for_status()
+        return resp.json().get("text", "").strip()
+    except Exception as e:
+        return f"[openai lỗi: {e}]"
+
+
 def transcribe_all(audio_path: Path) -> dict:
-    """Trả về {'gemini': ..., 'groq': ...} - None nếu engine không có key."""
+    """Trả về {'gemini': ..., 'groq': ..., 'openai': ...} - None nếu engine không có key."""
     return {
         "gemini": transcribe_gemini(audio_path),
         "groq": transcribe_groq(audio_path),
+        "openai": transcribe_openai(audio_path),
     }

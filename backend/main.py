@@ -63,6 +63,7 @@ def status():
         "asr_engines": {
             "gemini": bool(config.GEMINI_API_KEY),
             "groq": bool(config.GROQ_API_KEY),
+            "openai": bool(config.OPENAI_API_KEY),
         },
         "jira_mode": "real" if config.JIRA_ENABLED else "mock",
     }
