@@ -43,9 +43,19 @@ class ObsController:
                 if self._client.get_record_status().output_active:
                     break
                 time.sleep(0.1)
+            else:
+                raise RuntimeError(
+                    "OBS không bắt đầu record sau 5s. Kiểm tra OBS đã cấu hình "
+                    "output path / scene hợp lệ chưa."
+                )
         return time.time()
 
     def stop_record(self) -> str:
         """Dừng record, trả về đường dẫn file video OBS vừa lưu."""
+        if not self.is_connected():
+            raise RuntimeError("Không kết nối được OBS.")
+        if not self._client.get_record_status().output_active:
+            # recording đã không còn chạy (OBS tự dừng / chưa từng start)
+            return ""
         resp = self._client.stop_record()
         return resp.output_path

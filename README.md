@@ -32,7 +32,7 @@ sessions/           # data mỗi session (tự tạo, gitignored)
 
 - Cài [OBS Studio](https://obsproject.com/) + bật **Tools > WebSocket Server Settings > Enable** (note lại password).
 - Scene: thêm **Window Capture** trỏ vào cửa sổ Roblox (⚠️ KHÔNG dùng Game Capture — anti-cheat Byfron chặn, màn hình đen). Chạy Roblox ở windowed/borderless.
-- **Settings > Output > Recording**: format **mkv** (an toàn khi crash).
+- **Cấu hình video/recording cho nét + phát được trong app/Jira**: xem [`docs/OBS_SETUP.md`](docs/OBS_SETUP.md). Tóm tắt: Output resolution = Base (không downscale), filter Lanczos, 30 FPS, Quality **HQ**, format **mp4**.
 - Tách track mic: **Settings > Output > Output Mode: Advanced > Recording > Audio Track** — nếu chỉ ghi mic vào track 1 thì giữ `MIC_AUDIO_STREAM=0` trong `.env`. Nếu track 1 = desktop, track 2 = mic thì đặt `MIC_AUDIO_STREAM=1`.
 
 ### 2. Backend

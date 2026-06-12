@@ -44,6 +44,7 @@ export default function App() {
           <Dot ok={status?.obs_connected} label={status?.obs_connected ? 'OBS đã kết nối' : 'OBS chưa kết nối'} />
           <Dot ok={status?.asr_engines?.gemini} label="Gemini" />
           <Dot ok={status?.asr_engines?.groq} label="Groq" />
+          <Dot ok={status?.asr_engines?.openai} label="OpenAI" />
           <span className="muted">Jira: {status?.jira_mode}</span>
         </div>
 

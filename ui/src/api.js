@@ -23,4 +23,5 @@ export const api = {
   pushDraft: (id, draftId) =>
     request(`/sessions/${id}/drafts/${draftId}/push`, { method: 'POST' }),
   fileUrl: (id, filename) => `/api/sessions/${id}/files/${filename}`,
+  videoUrl: (id) => `/api/sessions/${id}/video`,
 }

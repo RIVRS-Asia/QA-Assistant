@@ -25,6 +25,10 @@ export default function SessionDetail({ id, onBack }) {
       <p className="muted">{meta.markers?.length || 0} bug được đánh dấu · video: {meta.video_path}</p>
       {meta.error && <div className="error">{meta.error}</div>}
 
+      {meta.video_path && (
+        <video controls width="100%" src={api.videoUrl(id)} style={{ maxHeight: 420, background: '#000' }} />
+      )}
+
       {meta.status === 'recorded' && (
         <button className="start" onClick={async () => { await api.processSession(id); load() }}>
           ▶ Xử lý session (transcript + tạo issue)

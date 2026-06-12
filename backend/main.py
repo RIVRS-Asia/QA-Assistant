@@ -187,3 +187,13 @@ def get_file(session_id: str, filename: str):
     if not path.exists():
         raise HTTPException(404)
     return FileResponse(path)
+
+
+@app.get("/api/sessions/{session_id}/video")
+def get_video(session_id: str):
+    """Stream video OBS đã lưu (video_path là đường dẫn tuyệt đối ngoài session dir)."""
+    meta = _load_meta(_session_dir(session_id))
+    video_path = Path(meta.get("video_path", ""))
+    if not video_path.is_file():
+        raise HTTPException(404, "Không tìm thấy file video")
+    return FileResponse(video_path)
