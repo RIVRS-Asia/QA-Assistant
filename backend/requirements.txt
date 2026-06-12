@@ -5,3 +5,4 @@ pynput
 obsws-python
 google-genai
 requests
+imageio-ffmpeg

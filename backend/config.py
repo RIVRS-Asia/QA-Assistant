@@ -25,12 +25,14 @@ OBS_PORT = int(os.getenv("OBS_PORT", "4455"))
 OBS_PASSWORD = os.getenv("OBS_PASSWORD", "")
 
 # Recording / markers
-MARKER_HOTKEY = os.getenv("MARKER_HOTKEY", "<ctrl>+<shift>+<f9>")
+RECORD_HOTKEY = os.getenv("RECORD_HOTKEY", "<ctrl>+<shift>+<f9>")    # bug kèm video clip
+CAPTURE_HOTKEY = os.getenv("CAPTURE_HOTKEY", "<ctrl>+<shift>+<f10>")  # bug kèm screenshot
 MIC_AUDIO_STREAM = int(os.getenv("MIC_AUDIO_STREAM", "0"))
 
-# Pipeline
-CLIP_PRE_SECONDS = float(os.getenv("CLIP_PRE_SECONDS", "30"))
-CLIP_POST_SECONDS = float(os.getenv("CLIP_POST_SECONDS", "10"))
+# Record clip = PRE giây trước + POST giây sau lúc nhấn. OBS Max Replay Time phải >= PRE+POST.
+# (POST = thời gian đợi sau khi nhấn rồi mới lưu replay buffer, vì buffer chỉ chứa quá khứ.)
+RECORD_PRE_SECONDS = float(os.getenv("RECORD_PRE_SECONDS", "20"))
+RECORD_POST_SECONDS = float(os.getenv("RECORD_POST_SECONDS", "20"))
 
 # Jira (trống = mock mode)
 JIRA_BASE_URL = os.getenv("JIRA_BASE_URL", "")

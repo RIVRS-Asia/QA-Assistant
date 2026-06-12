@@ -1,17 +1,20 @@
 import { useEffect, useState } from 'react'
 import { api } from './api'
 import SessionDetail from './SessionDetail'
+import BugDetail from './BugDetail'
 
 export default function App() {
   const [status, setStatus] = useState(null)
   const [sessions, setSessions] = useState([])
-  const [selected, setSelected] = useState(null)
+  const [bugs, setBugs] = useState([])
+  const [view, setView] = useState(null) // null=home | {kind:'session',id} | {kind:'bug',sessionId,bugId}
   const [error, setError] = useState('')
 
   const refresh = async () => {
     try {
       setStatus(await api.status())
       setSessions(await api.listSessions())
+      setBugs(await api.listBugs())
     } catch (e) {
       setError('Không kết nối được backend (uvicorn main:app --port 8000)')
     }
@@ -51,7 +54,7 @@ export default function App() {
         {status?.recording ? (
           <div className="recording">
             <p>🔴 Đang ghi — session <b>{status.active_session}</b></p>
-            <p>Nhấn <kbd>{status.hotkey}</kbd> khi gặp bug rồi mô tả bằng lời. Đã đánh dấu: <b>{status.marker_count}</b> bug</p>
+            <p>Gặp bug → mô tả bằng lời rồi nhấn <kbd>{status.record_hotkey}</kbd> (video) hoặc <kbd>{status.capture_hotkey}</kbd> (ảnh). Đã đánh dấu: <b>{status.marker_count}</b> bug</p>
             <button className="stop" onClick={() => act(api.stopSession)}>⏹ Kết thúc session</button>
           </div>
         ) : (
@@ -65,21 +68,42 @@ export default function App() {
         )}
       </div>
 
-      {/* ===== Sessions list / detail ===== */}
-      {selected ? (
-        <SessionDetail id={selected} onBack={() => { setSelected(null); refresh() }} />
+      {/* ===== Detail views / home ===== */}
+      {view?.kind === 'session' ? (
+        <SessionDetail id={view.id} onBack={() => { setView(null); refresh() }} onOpenBug={(bugId) => setView({ kind: 'bug', sessionId: view.id, bugId })} />
+      ) : view?.kind === 'bug' ? (
+        <BugDetail sessionId={view.sessionId} bugId={view.bugId} onBack={() => { setView(null); refresh() }} />
       ) : (
-        <div className="panel">
-          <h2>Sessions</h2>
-          {sessions.length === 0 && <p className="muted">Chưa có session nào.</p>}
-          {sessions.map((s) => (
-            <div key={s.id} className="session-row" onClick={() => setSelected(s.id)}>
-              <b>{s.id}</b>
-              <span>{s.draft_count} bug</span>
-              <span className={`status status-${s.status}`}>{s.status}</span>
-            </div>
-          ))}
-        </div>
+        <>
+          {/* Bugs table (toàn cục) */}
+          <div className="panel">
+            <h2>Bugs</h2>
+            {bugs.length === 0 && <p className="muted">Chưa có bug nào. Bắt đầu session rồi nhấn hotkey khi gặp bug — bug sẽ tự hiện ở đây.</p>}
+            {bugs.map((b) => (
+              <div key={`${b.session_id}-${b.id}`} className="session-row"
+                   onClick={() => setView({ kind: 'bug', sessionId: b.session_id, bugId: b.id })}>
+                <span>{b.type === 'capture' ? '📷' : '📹'} {b.title || '(chưa có tiêu đề)'}</span>
+                <span className="muted">{b.session_id}</span>
+                {b.status === 'pushed'
+                  ? <span className="status status-done">✓ {b.jira_key}</span>
+                  : <span className="status status-recorded">draft</span>}
+              </div>
+            ))}
+          </div>
+
+          {/* Sessions table */}
+          <div className="panel">
+            <h2>Sessions</h2>
+            {sessions.length === 0 && <p className="muted">Chưa có session nào.</p>}
+            {sessions.map((s) => (
+              <div key={s.id} className="session-row" onClick={() => setView({ kind: 'session', id: s.id })}>
+                <b>{s.id}</b>
+                <span>{s.draft_count} bug</span>
+                <span className={`status status-${s.status}`}>{s.status}</span>
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   )

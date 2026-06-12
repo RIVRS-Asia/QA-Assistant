@@ -16,12 +16,12 @@ export const api = {
   startSession: () => request('/session/start', { method: 'POST' }),
   stopSession: () => request('/session/stop', { method: 'POST' }),
   listSessions: () => request('/sessions'),
+  listBugs: () => request('/bugs'),
   getSession: (id) => request(`/sessions/${id}`),
-  processSession: (id) => request(`/sessions/${id}/process`, { method: 'POST' }),
+  getBug: (id, bugId) => request(`/sessions/${id}/bugs/${bugId}`),
   updateDraft: (id, draftId, issue) =>
     request(`/sessions/${id}/drafts/${draftId}`, { method: 'PUT', body: JSON.stringify(issue) }),
   pushDraft: (id, draftId) =>
     request(`/sessions/${id}/drafts/${draftId}/push`, { method: 'POST' }),
   fileUrl: (id, filename) => `/api/sessions/${id}/files/${filename}`,
-  videoUrl: (id) => `/api/sessions/${id}/video`,
 }

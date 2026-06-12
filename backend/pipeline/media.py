@@ -1,8 +1,21 @@
-"""Các thao tác ffmpeg: cắt audio quanh marker, extract screenshot từ video."""
+"""Các thao tác ffmpeg trên clip replay buffer (clip đã là cửa sổ quanh thời điểm nhấn)."""
 import subprocess
 from pathlib import Path
 
 import config
+
+
+def _ffmpeg_exe() -> str:
+    """Ưu tiên binary ffmpeg đi kèm gói imageio-ffmpeg (cài qua pip, không cần setup PATH);
+    không có thì rơi về 'ffmpeg' trên PATH hệ thống."""
+    try:
+        import imageio_ffmpeg
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        return "ffmpeg"
+
+
+FFMPEG = _ffmpeg_exe()
 
 
 def _run(cmd: list[str]):
@@ -11,14 +24,11 @@ def _run(cmd: list[str]):
         raise RuntimeError(f"ffmpeg lỗi: {result.stderr[-500:]}")
 
 
-def extract_audio_clip(video_path: str, marker_offset: float, out_path: Path) -> Path:
-    """Cắt đoạn audio MIC quanh marker -> wav 16kHz mono (chuẩn cho ASR)."""
-    start = max(0.0, marker_offset - config.CLIP_PRE_SECONDS)
-    duration = config.CLIP_PRE_SECONDS + config.CLIP_POST_SECONDS
+def extract_audio_clip(clip_path: str, out_path: Path) -> Path:
+    """Trích toàn bộ audio MIC của clip -> wav 16kHz mono (chuẩn cho ASR)."""
     _run([
-        "ffmpeg", "-y",
-        "-ss", str(start), "-t", str(duration),
-        "-i", video_path,
+        FFMPEG, "-y",
+        "-i", clip_path,
         "-map", f"0:a:{config.MIC_AUDIO_STREAM}",
         "-ac", "1", "-ar", "16000",
         str(out_path),
@@ -26,19 +36,24 @@ def extract_audio_clip(video_path: str, marker_offset: float, out_path: Path) ->
     return out_path
 
 
-def extract_screenshots(video_path: str, marker_offset: float, out_dir: Path, marker_index: int) -> list[str]:
-    """Lấy 3 frame quanh thời điểm bug (bug thường xảy ra TRƯỚC khi QA nhấn hotkey)."""
-    offsets = [marker_offset - 8, marker_offset - 3, marker_offset - 0.5]
-    files = []
-    for i, t in enumerate(offsets):
-        if t < 0:
-            continue
-        out = out_dir / f"bug{marker_index}_frame{i}.jpg"
-        _run([
-            "ffmpeg", "-y",
-            "-ss", str(t), "-i", video_path,
-            "-frames:v", "1", "-q:v", "3",
-            str(out),
-        ])
-        files.append(out.name)
-    return files
+def save_video_clip(clip_path: str, out_path: Path, seconds: float) -> str:
+    """Cắt `seconds` giây cuối clip replay (= cửa sổ PRE+POST quanh lúc nhấn) -> mp4."""
+    _run([
+        FFMPEG, "-y",
+        "-sseof", f"-{seconds}",
+        "-i", clip_path,
+        "-c", "copy",
+        str(out_path),
+    ])
+    return out_path.name
+
+
+def extract_frame(clip_path: str, out_path: Path) -> str:
+    """Lấy 1 frame gần cuối clip (thời điểm nhấn hotkey) làm screenshot."""
+    _run([
+        FFMPEG, "-y",
+        "-sseof", "-1", "-i", clip_path,
+        "-frames:v", "1", "-q:v", "3",
+        str(out_path),
+    ])
+    return out_path.name

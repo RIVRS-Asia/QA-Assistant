@@ -3,10 +3,11 @@
 Pipeline tự động hoá báo bug khi QA playtest game Roblox:
 
 ```
-QA chơi game → nhấn hotkey khi gặp bug + mô tả bằng lời (tiếng Việt)
-→ OBS record màn hình + mic
-→ Pipeline: cắt audio/screenshot quanh marker → transcribe (Gemini + Groq)
-→ LLM viết draft Jira issue tiếng Anh
+QA chơi game → gặp bug: mô tả bằng lời (tiếng Việt) + nhấn hotkey
+   Ctrl+Shift+F9  = VIDEO clip (20s trước + 20s sau)  |  Ctrl+Shift+F10 = SCREENSHOT (1 frame)
+→ OBS Replay Buffer: mỗi lần nhấn lưu 1 clip — KHÔNG record cả session
+→ Mỗi bug tự xử lý ngầm ngay: audio + (clip mp4 / frame ảnh) → transcribe (Gemini + Groq)
+→ LLM viết draft Jira issue tiếng Anh → hiện dần trong bảng Bugs
 → UI review/sửa → push Jira (mock mode mặc định)
 ```
 
@@ -32,12 +33,13 @@ sessions/           # data mỗi session (tự tạo, gitignored)
 
 - Cài [OBS Studio](https://obsproject.com/) + bật **Tools > WebSocket Server Settings > Enable** (note lại password).
 - Scene: thêm **Window Capture** trỏ vào cửa sổ Roblox (⚠️ KHÔNG dùng Game Capture — anti-cheat Byfron chặn, màn hình đen). Chạy Roblox ở windowed/borderless.
-- **Cấu hình video/recording cho nét + phát được trong app/Jira**: xem [`docs/OBS_SETUP.md`](docs/OBS_SETUP.md). Tóm tắt: Output resolution = Base (không downscale), filter Lanczos, 30 FPS, Quality **HQ**, format **mp4**.
+- **Cấu hình video/recording + bật Replay Buffer**: xem [`docs/OBS_SETUP.md`](docs/OBS_SETUP.md). Tóm tắt: Output resolution = Base (không downscale), filter Lanczos, 30 FPS, Quality **HQ**, format **mp4**, **bật Replay Buffer (Max Replay Time ~40s)** — app chỉ lưu clip khi nhấn hotkey.
 - Tách track mic: **Settings > Output > Output Mode: Advanced > Recording > Audio Track** — nếu chỉ ghi mic vào track 1 thì giữ `MIC_AUDIO_STREAM=0` trong `.env`. Nếu track 1 = desktop, track 2 = mic thì đặt `MIC_AUDIO_STREAM=1`.
 
 ### 2. Backend
 
-Cần Python 3.10+ và [ffmpeg](https://ffmpeg.org/download.html) trong PATH.
+Cần Python 3.10+. ffmpeg (dùng để cắt audio/video & chụp frame) đi kèm gói
+`imageio-ffmpeg` trong requirements — `pip install` là có, không cần cài thêm hay set PATH.
 
 ```bash
 cd backend
@@ -81,14 +83,17 @@ Mở http://localhost:5173
 
 1. Mở OBS (đúng scene), mở UI, kiểm tra chấm xanh "OBS đã kết nối".
 2. Bấm **Bắt đầu session test** → chơi game.
-3. Gặp bug → nhấn `Ctrl+Shift+F9` → nói mô tả bug bằng lời (vị trí, điều gì xảy ra, cách tái hiện).
-4. Xong → **Kết thúc session** → vào session → **Xử lý session**.
-5. Review từng draft (screenshot + transcript + issue tiếng Anh), sửa nếu cần → **Push Jira**.
+3. Gặp bug → nói mô tả bug bằng lời (vị trí, điều gì xảy ra, cách tái hiện) → nhấn:
+   - `Ctrl+Shift+F9` nếu bug cần **video clip** (20s trước + 20s sau lúc nhấn)
+   - `Ctrl+Shift+F10` nếu bug chỉ cần **screenshot** (1 frame + transcript)
+   - Mỗi bug tự xử lý ngầm và hiện dần trong bảng **Bugs** (record mất ~20s+ vì đợi quay nốt 20s sau).
+4. Xong → **Kết thúc session** (đợi ~20s để bug record cuối quay xong).
+5. Mở bảng **Bugs** → click 1 bug → trang chi tiết (video/ảnh + transcript + issue tiếng Anh + link Jira), sửa nếu cần → **Push Jira**.
 
 ## Ghi chú kỹ thuật
 
-- Marker lưu **offset giây từ lúc OBS start record** (sync qua obs-websocket) — không lệch timestamp.
-- Clip audio cắt lùi 30s trước marker (bug luôn xảy ra trước khi QA kịp nhấn phím), chỉnh bằng `CLIP_PRE_SECONDS`.
+- Mỗi lần nhấn hotkey app gọi OBS `SaveReplayBuffer` qua obs-websocket. **Record** đợi `RECORD_POST_SECONDS` (20s) rồi mới lưu để clip có cả footage SAU lúc nhấn, sau đó cắt lấy `PRE+POST` giây cuối (20s trước + 20s sau). **Capture** lưu ngay, trích 1 frame. ⚠️ OBS Max Replay Time phải ≥ PRE+POST (40s).
+- Bug xử lý **ngay sau mỗi lần mark** trong thread riêng (không block) → transcript + issue hiện dần, không cần bấm "Xử lý session".
 - Transcript chạy cả Gemini + Groq để so sánh giọng vùng miền — xem mục "Transcript" trong UI, engine nào kém thì bỏ key đi là tắt.
 - Issue writer cross-reference 2 transcript để tự sửa lỗi ASR.
 

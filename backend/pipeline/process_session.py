@@ -1,41 +1,47 @@
-"""Pipeline xử lý sau session: với mỗi marker ->
-1. Cắt audio quanh marker (ffmpeg)
-2. Transcribe (Gemini + Groq song song để so sánh)
-3. Extract screenshots
-4. LLM viết draft issue tiếng Anh
-Kết quả lưu vào sessions/<id>/drafts.json
+"""Xử lý 1 bug ngay sau khi QA mark (mỗi marker có sẵn 1 clip replay buffer OBS đã lưu):
+- type "record"  : cắt PRE+POST giây cuối clip thành bug{i}.mp4 (giữ video)
+- type "capture" : trích 1 frame bug{i}.jpg (bỏ video)
+Cả 2: trích audio mic -> transcribe -> LLM viết draft issue EN. Xử lý xong xoá clip gốc.
 """
-import json
 from pathlib import Path
 
+import config
 from pipeline import media, transcribe, issue_writer
 
 
-def process(session_dir: Path) -> list[dict]:
-    meta = json.loads((session_dir / "session.json").read_text(encoding="utf-8"))
-    video_path = meta["video_path"]
-    markers = meta.get("markers", [])
+def process_marker(session_dir: Path, bug_id: int, marker: dict) -> dict:
+    """Mỗi bước (audio/transcribe/LLM/media) đều best-effort: lỗi (vd thiếu ffmpeg,
+    thiếu API key) thì cho giá trị rỗng chứ KHÔNG drop bug - bug luôn được ghi draft."""
+    clip_path = marker["clip_path"]
+    marker_type = marker.get("type", "record")
 
-    drafts = []
-    for i, marker in enumerate(markers):
-        offset = marker["offset_seconds"]
-        print(f"[pipeline] xử lý marker {i + 1}/{len(markers)} tại {offset}s")
-
-        audio_path = media.extract_audio_clip(video_path, offset, session_dir / f"bug{i}.wav")
-        screenshots = media.extract_screenshots(video_path, offset, session_dir, i)
+    try:
+        audio_path = media.extract_audio_clip(clip_path, session_dir / f"bug{bug_id}.wav")
         transcripts = transcribe.transcribe_all(audio_path)
-        issue = issue_writer.write_issue(transcripts)
+    except Exception as e:
+        print(f"[bug {bug_id}] audio/transcribe lỗi: {e}")
+        transcripts = {}
+    issue = issue_writer.write_issue(transcripts)
 
-        drafts.append({
-            "id": i,
-            "marker_offset": offset,
-            "screenshots": screenshots,
-            "transcripts": transcripts,
-            "issue": issue,
-            "status": "draft",  # draft -> pushed
-        })
+    video_clip = None
+    screenshots = []
+    try:
+        if marker_type == "capture":
+            screenshots = [media.extract_frame(clip_path, session_dir / f"bug{bug_id}.jpg")]
+        else:  # record
+            window = config.RECORD_PRE_SECONDS + config.RECORD_POST_SECONDS
+            video_clip = media.save_video_clip(clip_path, session_dir / f"bug{bug_id}.mp4", window)
+    except Exception as e:
+        print(f"[bug {bug_id}] media lỗi: {e}")
 
-    (session_dir / "drafts.json").write_text(
-        json.dumps(drafts, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
-    return drafts
+    Path(clip_path).unlink(missing_ok=True)  # chỉ giữ bản trong session dir
+
+    return {
+        "id": bug_id,
+        "type": marker_type,
+        "video_clip": video_clip,
+        "screenshots": screenshots,
+        "transcripts": transcripts,
+        "issue": issue,
+        "status": "draft",  # draft -> pushed
+    }

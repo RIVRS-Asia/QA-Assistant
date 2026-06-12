@@ -84,6 +84,14 @@ def _call_openai(prompt: str) -> str:
 
 
 def write_issue(transcripts: dict) -> dict:
+    if not (config.GEMINI_API_KEY or config.OPENAI_API_KEY or config.GROQ_API_KEY):
+        return {
+            "title": "",
+            "description": "",
+            "repro_steps": [],
+            "severity": "",
+            "transcript_summary_vi": "",
+        }
     prompt = ISSUE_PROMPT.format(transcripts=_format_transcripts(transcripts))
     try:
         if config.GEMINI_API_KEY:
@@ -94,11 +102,12 @@ def write_issue(transcripts: dict) -> dict:
             raw = _call_groq(prompt)
         issue = _parse_json(raw)
     except Exception as e:
+        print(f"[issue_writer] LLM lỗi, trả issue rỗng: {e}")
         issue = {
-            "title": "[ERROR] Could not generate issue",
-            "description": f"LLM error: {e}",
+            "title": "",
+            "description": "",
             "repro_steps": [],
-            "severity": "medium",
+            "severity": "",
             "transcript_summary_vi": "",
         }
     return issue

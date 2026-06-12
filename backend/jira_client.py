@@ -26,7 +26,8 @@ def _push_mock(session_dir: Path, draft: dict) -> dict:
         "key": fake_key,
         "pushed_at": datetime.now().isoformat(),
         "issue": draft["issue"],
-        "screenshots": draft["screenshots"],
+        "video_clip": draft.get("video_clip"),
+        "screenshots": draft.get("screenshots", []),
     })
     out_file.write_text(json.dumps(pushed, ensure_ascii=False, indent=2), encoding="utf-8")
     return {"key": fake_key, "mock": True}
@@ -57,4 +58,5 @@ def _push_real(draft: dict) -> dict:
         timeout=30,
     )
     resp.raise_for_status()
-    return {"key": resp.json()["key"], "mock": False}
+    key = resp.json()["key"]
+    return {"key": key, "url": f"{config.JIRA_BASE_URL}/browse/{key}", "mock": False}
