@@ -6,8 +6,10 @@ Automated bug reporting pipeline for QA playtesting Roblox games:
 QA plays game → encounters bug: describes verbally (in Vietnamese) + presses hotkey
    Ctrl+Shift+F9  = VIDEO clip (20s before + 20s after)  |  Ctrl+Shift+F10 = SCREENSHOT (1 frame)
 → OBS Replay Buffer: each press saves 1 clip — does NOT record the entire session
-→ Each bug is processed automatically in the background: audio + (mp4 clip / image frame) → transcribe (Gemini + Groq)
-→ LLM writes draft Jira issue in English → appears progressively in the Bugs table
+→ Each bug is processed automatically in the background: audio + (mp4 clip / image frame)
+  → transcribe (Gemini / Groq Whisper / OpenAI Whisper — any combination, run in parallel)
+→ LLM writes draft Jira issue in English (Gemini → OpenAI GPT → Groq llama, first available)
+  → appears progressively in the Bugs table
 → UI review/edit → push to Jira (mock mode by default)
 ```
 
@@ -21,8 +23,8 @@ backend/            # Python 3 - FastAPI
   jira_client.py    # push to Jira (mock = write JSON)
   pipeline/
     media.py        # ffmpeg: trim audio, extract screenshot
-    transcribe.py   # Gemini + Groq (compare 2 engines)
-    issue_writer.py # transcript VI -> Jira issue EN
+    transcribe.py   # Gemini + Groq Whisper + OpenAI Whisper (parallel, any combination)
+    issue_writer.py # transcript VI -> Jira issue EN (Gemini → OpenAI → Groq llama)
 ui/                 # React (Vite) - session control + review drafts
 sessions/           # data per session (auto-created, gitignored)
 ```
@@ -53,8 +55,11 @@ pip install -r requirements.txt
 copy .env.example .env
 ```
 
-Minimum required: `GEMINI_API_KEY` and/or `GROQ_API_KEY`, `OBS_PASSWORD`.
+Minimum required: at least one of `GEMINI_API_KEY` / `GROQ_API_KEY` / `OPENAI_API_KEY`, and `OBS_PASSWORD`.
 Leave Jira fields empty = mock mode (issues written to `sessions/<id>/pushed_issues.json`).
+
+**ASR engines** (transcription): any combination is valid — set the keys for the engines you want to use.
+**Issue writer** uses the first available key in order: Gemini → OpenAI → Groq.
 
 ### 4. UI
 
@@ -94,8 +99,8 @@ Open http://localhost:5173
 
 - Each hotkey press calls OBS `SaveReplayBuffer` via obs-websocket. **Record** waits `RECORD_POST_SECONDS` (20s) before saving so the clip includes footage AFTER the press, then trims to the last `PRE+POST` seconds (20s before + 20s after). **Capture** saves immediately, extracts 1 frame. ⚠️ OBS Max Replay Time must be ≥ PRE+POST (40s).
 - Bugs are processed **immediately after each mark** in a separate thread (non-blocking) → transcript + issue appear progressively, no need to click "Process session".
-- Transcript runs both Gemini + Groq for comparison across regional accents — see the "Transcript" section in the UI; if one engine performs poorly, remove its key to disable it.
-- Issue writer cross-references both transcripts to self-correct ASR errors.
+- Transcription supports 3 ASR engines: **Gemini Flash** (multimodal, best at regional accents + game terms), **Groq Whisper large-v3** (fast, cheap), **OpenAI Whisper** (reliable baseline). Each engine runs if its API key is set; all enabled engines run in parallel. See the "Transcript" section in the UI to compare results.
+- **Issue writer** uses the first available LLM key in order: Gemini → OpenAI GPT-4o → Groq llama-3.3-70b. It cross-references all available transcripts to self-correct ASR errors.
 
 ## TODO after POC
 
