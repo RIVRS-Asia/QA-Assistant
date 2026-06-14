@@ -1,4 +1,4 @@
-"""Các thao tác ffmpeg trên clip replay buffer (clip đã là cửa sổ quanh thời điểm nhấn)."""
+"""ffmpeg operations on replay buffer clips (clip is already the window around the press time)."""
 import subprocess
 from pathlib import Path
 
@@ -6,8 +6,8 @@ import config
 
 
 def _ffmpeg_exe() -> str:
-    """Ưu tiên binary ffmpeg đi kèm gói imageio-ffmpeg (cài qua pip, không cần setup PATH);
-    không có thì rơi về 'ffmpeg' trên PATH hệ thống."""
+    """Prefer the ffmpeg binary bundled with imageio-ffmpeg (installed via pip, no PATH setup needed);
+    fall back to 'ffmpeg' on the system PATH if not found."""
     try:
         import imageio_ffmpeg
         return imageio_ffmpeg.get_ffmpeg_exe()
@@ -21,11 +21,11 @@ FFMPEG = _ffmpeg_exe()
 def _run(cmd: list[str]):
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        raise RuntimeError(f"ffmpeg lỗi: {result.stderr[-500:]}")
+        raise RuntimeError(f"ffmpeg error: {result.stderr[-500:]}")
 
 
 def extract_audio_clip(clip_path: str, out_path: Path) -> Path:
-    """Trích toàn bộ audio MIC của clip -> wav 16kHz mono (chuẩn cho ASR)."""
+    """Extract the full MIC audio from the clip -> 16kHz mono wav (standard for ASR)."""
     _run([
         FFMPEG, "-y",
         "-i", clip_path,
@@ -37,7 +37,7 @@ def extract_audio_clip(clip_path: str, out_path: Path) -> Path:
 
 
 def save_video_clip(clip_path: str, out_path: Path, seconds: float) -> str:
-    """Cắt `seconds` giây cuối clip replay (= cửa sổ PRE+POST quanh lúc nhấn) -> mp4."""
+    """Trim the last `seconds` seconds of the replay clip (= PRE+POST window around the press time) -> mp4."""
     _run([
         FFMPEG, "-y",
         "-sseof", f"-{seconds}",
@@ -49,7 +49,7 @@ def save_video_clip(clip_path: str, out_path: Path, seconds: float) -> str:
 
 
 def extract_frame(clip_path: str, out_path: Path) -> str:
-    """Lấy 1 frame gần cuối clip (thời điểm nhấn hotkey) làm screenshot."""
+    """Extract 1 frame near the end of the clip (the hotkey press moment) as a screenshot."""
     _run([
         FFMPEG, "-y",
         "-sseof", "-1", "-i", clip_path,

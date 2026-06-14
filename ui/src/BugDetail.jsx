@@ -17,8 +17,8 @@ export default function BugDetail({ sessionId, bugId, onBack }) {
 
   useEffect(() => { load() }, [sessionId, bugId])
 
-  if (error) return <div className="panel"><button className="link" onClick={onBack}>← Quay lại</button><div className="error">{error}</div></div>
-  if (!draft) return <p className="muted">Đang tải...</p>
+  if (error) return <div className="panel"><button className="link" onClick={onBack}>← Back</button><div className="error">{error}</div></div>
+  if (!draft) return <p className="muted">Loading...</p>
 
   const set = (k, v) => setIssue({ ...issue, [k]: v })
 
@@ -31,7 +31,7 @@ export default function BugDetail({ sessionId, bugId, onBack }) {
 
   const push = async () => {
     setBusy(true)
-    await api.updateDraft(sessionId, bugId, issue) // lưu chỉnh sửa trước khi push
+    await api.updateDraft(sessionId, bugId, issue) // save edits before pushing
     await api.pushDraft(sessionId, bugId)
     setBusy(false)
     load()
@@ -39,7 +39,7 @@ export default function BugDetail({ sessionId, bugId, onBack }) {
 
   return (
     <div className="panel">
-      <button className="link" onClick={onBack}>← Quay lại</button>
+      <button className="link" onClick={onBack}>← Back</button>
       <h2>
         {draft.type === 'capture' ? '📷' : '📹'} Bug #{bugId + 1}
         {draft.status === 'pushed'
@@ -50,7 +50,7 @@ export default function BugDetail({ sessionId, bugId, onBack }) {
       </h2>
       <p className="muted">Session {sessionId}</p>
 
-      {/* Video clip (record) hoặc ảnh (capture) */}
+      {/* Video clip (record) or image (capture) */}
       {draft.video_clip && (
         <video controls width="100%" src={api.fileUrl(sessionId, draft.video_clip)}
                style={{ maxHeight: 360, background: '#000' }} />
@@ -63,22 +63,22 @@ export default function BugDetail({ sessionId, bugId, onBack }) {
         ))}
       </div>
       {!draft.video_clip && (draft.screenshots || []).length === 0 && (
-        <p className="muted">Chưa có {draft.type === 'capture' ? 'ảnh' : 'video'} — kiểm tra ffmpeg đã cài & trong PATH chưa.</p>
+        <p className="muted">No {draft.type === 'capture' ? 'image' : 'video'} yet — check that ffmpeg is installed & in PATH.</p>
       )}
 
-      {/* Transcript thô (so sánh engine) */}
+      {/* Raw transcript (engine comparison) */}
       <details open>
-        <summary>Transcript (lời QA nói)</summary>
+        <summary>Transcript (QA verbal description)</summary>
         {Object.entries(draft.transcripts || {}).map(([engine, text]) =>
           text ? <p key={engine}><b>{engine}:</b> {text}</p> : null
         )}
         {draft.audio
           ? <audio controls src={api.fileUrl(sessionId, draft.audio)} />
-          : <p className="muted">Chưa có audio mic (cần ffmpeg để trích từ clip OBS).</p>}
+          : <p className="muted">No mic audio yet (ffmpeg is needed to extract it from the OBS clip).</p>}
       </details>
 
-      {/* Text LLM extract từ transcript = issue (sửa được) */}
-      <h3 style={{ fontSize: 14, margin: '14px 0 4px' }}>Issue (LLM viết từ transcript)</h3>
+      {/* Text extracted by LLM from transcript = issue (editable) */}
+      <h3 style={{ fontSize: 14, margin: '14px 0 4px' }}>Issue (LLM-generated from transcript)</h3>
       <label>Title
         <input value={issue.title} onChange={(e) => set('title', e.target.value)} />
       </label>
@@ -100,7 +100,7 @@ export default function BugDetail({ sessionId, bugId, onBack }) {
 
       {draft.status !== 'pushed' && (
         <div className="row">
-          <button onClick={save} disabled={busy}>💾 Lưu</button>
+          <button onClick={save} disabled={busy}>💾 Save</button>
           <button className="start" onClick={push} disabled={busy}>🚀 Push Jira</button>
         </div>
       )}

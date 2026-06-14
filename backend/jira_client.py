@@ -1,6 +1,6 @@
-"""Push issue lên Jira. Mặc định = MOCK MODE: ghi issue ra pushed_issues.json.
+"""Push issue to Jira. Default = MOCK MODE: writes issue to pushed_issues.json.
 
-Điền JIRA_* trong .env để push thật (Jira Cloud REST API v3).
+Fill in JIRA_* in .env to push for real (Jira Cloud REST API v3).
 """
 import json
 from datetime import datetime
@@ -18,7 +18,7 @@ def push_issue(session_dir: Path, draft: dict) -> dict:
 
 
 def _push_mock(session_dir: Path, draft: dict) -> dict:
-    """Mock: append issue vào file JSON, trả về key giả."""
+    """Mock: append issue to JSON file, return a fake key."""
     out_file = session_dir / "pushed_issues.json"
     pushed = json.loads(out_file.read_text(encoding="utf-8")) if out_file.exists() else []
     fake_key = f"MOCK-{len(pushed) + 1}"

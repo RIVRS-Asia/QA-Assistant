@@ -16,13 +16,13 @@ export default function App() {
       setSessions(await api.listSessions())
       setBugs(await api.listBugs())
     } catch (e) {
-      setError('Không kết nối được backend (uvicorn main:app --port 8000)')
+      setError('Could not connect to backend (uvicorn main:app --port 8000)')
     }
   }
 
   useEffect(() => {
     refresh()
-    const t = setInterval(refresh, 2000) // poll trạng thái mỗi 2s
+    const t = setInterval(refresh, 2000) // poll status every 2s
     return () => clearInterval(t)
   }, [])
 
@@ -44,7 +44,7 @@ export default function App() {
       {/* ===== Session control ===== */}
       <div className="panel">
         <div className="row">
-          <Dot ok={status?.obs_connected} label={status?.obs_connected ? 'OBS đã kết nối' : 'OBS chưa kết nối'} />
+          <Dot ok={status?.obs_connected} label={status?.obs_connected ? 'OBS connected' : 'OBS not connected'} />
           <Dot ok={status?.asr_engines?.gemini} label="Gemini" />
           <Dot ok={status?.asr_engines?.groq} label="Groq" />
           <Dot ok={status?.asr_engines?.openai} label="OpenAI" />
@@ -53,9 +53,9 @@ export default function App() {
 
         {status?.recording ? (
           <div className="recording">
-            <p>🔴 Đang ghi — session <b>{status.active_session}</b></p>
-            <p>Gặp bug → mô tả bằng lời rồi nhấn <kbd>{status.record_hotkey}</kbd> (video) hoặc <kbd>{status.capture_hotkey}</kbd> (ảnh). Đã đánh dấu: <b>{status.marker_count}</b> bug</p>
-            <button className="stop" onClick={() => act(api.stopSession)}>⏹ Kết thúc session</button>
+            <p>🔴 Recording — session <b>{status.active_session}</b></p>
+            <p>Encounter a bug → describe it verbally then press <kbd>{status.record_hotkey}</kbd> (video) or <kbd>{status.capture_hotkey}</kbd> (screenshot). Marked: <b>{status.marker_count}</b> bug(s)</p>
+            <button className="stop" onClick={() => act(api.stopSession)}>⏹ End session</button>
           </div>
         ) : (
           <button
@@ -63,7 +63,7 @@ export default function App() {
             disabled={!status?.obs_connected}
             onClick={() => act(api.startSession)}
           >
-            ⏺ Bắt đầu session test
+            ⏺ Start test session
           </button>
         )}
       </div>
@@ -75,14 +75,14 @@ export default function App() {
         <BugDetail sessionId={view.sessionId} bugId={view.bugId} onBack={() => { setView(null); refresh() }} />
       ) : (
         <>
-          {/* Bugs table (toàn cục) */}
+          {/* Bugs table (global) */}
           <div className="panel">
             <h2>Bugs</h2>
-            {bugs.length === 0 && <p className="muted">Chưa có bug nào. Bắt đầu session rồi nhấn hotkey khi gặp bug — bug sẽ tự hiện ở đây.</p>}
+            {bugs.length === 0 && <p className="muted">No bugs yet. Start a session and press the hotkey when you encounter a bug — bugs will appear here automatically.</p>}
             {bugs.map((b) => (
               <div key={`${b.session_id}-${b.id}`} className="session-row"
                    onClick={() => setView({ kind: 'bug', sessionId: b.session_id, bugId: b.id })}>
-                <span>{b.type === 'capture' ? '📷' : '📹'} {b.title || '(chưa có tiêu đề)'}</span>
+                <span>{b.type === 'capture' ? '📷' : '📹'} {b.title || '(no title yet)'}</span>
                 <span className="muted">{b.session_id}</span>
                 {b.status === 'pushed'
                   ? <span className="status status-done">✓ {b.jira_key}</span>
@@ -94,7 +94,7 @@ export default function App() {
           {/* Sessions table */}
           <div className="panel">
             <h2>Sessions</h2>
-            {sessions.length === 0 && <p className="muted">Chưa có session nào.</p>}
+            {sessions.length === 0 && <p className="muted">No sessions yet.</p>}
             {sessions.map((s) => (
               <div key={s.id} className="session-row" onClick={() => setView({ kind: 'session', id: s.id })}>
                 <b>{s.id}</b>

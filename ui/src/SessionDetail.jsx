@@ -11,23 +11,23 @@ export default function SessionDetail({ id, onBack, onOpenBug }) {
 
   useEffect(() => {
     load()
-    const t = setInterval(load, 3000) // poll khi đang processing
+    const t = setInterval(load, 3000) // poll while processing
     return () => clearInterval(t)
   }, [id])
 
-  if (!data) return <p className="muted">Đang tải...</p>
+  if (!data) return <p className="muted">Loading...</p>
   const { meta, drafts } = data
 
   return (
     <div className="panel">
-      <button className="link" onClick={onBack}>← Quay lại</button>
+      <button className="link" onClick={onBack}>← Back</button>
       <h2>Session {id} <span className={`status status-${meta.status}`}>{meta.status}</span></h2>
-      <p className="muted">{drafts.length} bug đã xử lý / {meta.markers?.length || 0} đã đánh dấu</p>
+      <p className="muted">{drafts.length} bugs processed / {meta.markers?.length || 0} marked</p>
       {meta.error && <div className="error">{meta.error}</div>}
 
       {drafts.map((d) => (
         <div key={d.id} className="session-row" onClick={() => onOpenBug(d.id)}>
-          <span>{d.type === 'capture' ? '📷' : '📹'} Bug #{d.id + 1} — {d.issue?.title || '(chưa có tiêu đề)'}</span>
+          <span>{d.type === 'capture' ? '📷' : '📹'} Bug #{d.id + 1} — {d.issue?.title || '(no title yet)'}</span>
           {d.status === 'pushed'
             ? <span className="status status-done">✓ {d.jira_key}</span>
             : <span className="status status-recorded">draft</span>}

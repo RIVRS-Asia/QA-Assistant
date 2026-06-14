@@ -1,7 +1,7 @@
-"""Xử lý 1 bug ngay sau khi QA mark (mỗi marker có sẵn 1 clip replay buffer OBS đã lưu):
-- type "record"  : cắt PRE+POST giây cuối clip thành bug{i}.mp4 (giữ video)
-- type "capture" : trích 1 frame bug{i}.jpg (bỏ video)
-Cả 2: trích audio mic -> transcribe -> LLM viết draft issue EN. Xử lý xong xoá clip gốc.
+"""Process a single bug immediately after the QA marks it (each marker has an OBS replay buffer clip saved):
+- type "record"  : trim the last PRE+POST seconds of the clip into bug{i}.mp4 (keep video)
+- type "capture" : extract 1 frame as bug{i}.jpg (discard video)
+Both: extract mic audio -> transcribe -> LLM writes draft issue in EN. Delete original clip when done.
 """
 from pathlib import Path
 
@@ -10,8 +10,8 @@ from pipeline import media, transcribe, issue_writer
 
 
 def process_marker(session_dir: Path, bug_id: int, marker: dict) -> dict:
-    """Mỗi bước (audio/transcribe/LLM/media) đều best-effort: lỗi (vd thiếu ffmpeg,
-    thiếu API key) thì cho giá trị rỗng chứ KHÔNG drop bug - bug luôn được ghi draft."""
+    """Each step (audio/transcribe/LLM/media) is best-effort: on error (e.g. missing ffmpeg,
+    missing API key) set empty values but do NOT drop the bug - bugs are always written as drafts."""
     clip_path = marker["clip_path"]
     marker_type = marker.get("type", "record")
 
@@ -19,7 +19,7 @@ def process_marker(session_dir: Path, bug_id: int, marker: dict) -> dict:
         audio_path = media.extract_audio_clip(clip_path, session_dir / f"bug{bug_id}.wav")
         transcripts = transcribe.transcribe_all(audio_path)
     except Exception as e:
-        print(f"[bug {bug_id}] audio/transcribe lỗi: {e}")
+        print(f"[bug {bug_id}] audio/transcribe error: {e}")
         transcripts = {}
     issue = issue_writer.write_issue(transcripts)
 
@@ -32,9 +32,9 @@ def process_marker(session_dir: Path, bug_id: int, marker: dict) -> dict:
             window = config.RECORD_PRE_SECONDS + config.RECORD_POST_SECONDS
             video_clip = media.save_video_clip(clip_path, session_dir / f"bug{bug_id}.mp4", window)
     except Exception as e:
-        print(f"[bug {bug_id}] media lỗi: {e}")
+        print(f"[bug {bug_id}] media error: {e}")
 
-    Path(clip_path).unlink(missing_ok=True)  # chỉ giữ bản trong session dir
+    Path(clip_path).unlink(missing_ok=True)  # keep only the copy in the session dir
 
     return {
         "id": bug_id,
@@ -43,5 +43,5 @@ def process_marker(session_dir: Path, bug_id: int, marker: dict) -> dict:
         "screenshots": screenshots,
         "transcripts": transcripts,
         "issue": issue,
-        "status": "draft",  # draft -> pushed
+        "status": "draft",  # draft -> pushed (workflow states)
     }

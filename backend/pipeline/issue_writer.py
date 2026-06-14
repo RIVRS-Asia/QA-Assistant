@@ -1,6 +1,6 @@
-"""Biến transcript tiếng Việt -> draft Jira issue tiếng Anh (JSON).
+"""Convert Vietnamese transcript -> draft Jira issue in English (JSON).
 
-Ưu tiên Gemini -> OpenAI (GPT) -> Groq (llama) tuỳ key nào có.
+Priority: Gemini -> OpenAI (GPT) -> Groq (llama), whichever key is available.
 """
 import json
 
@@ -28,7 +28,7 @@ If the transcript is empty or has no bug info, set title to "NO_BUG_DETECTED".""
 
 
 def _parse_json(text: str) -> dict:
-    """LLM đôi khi bọc JSON trong ```...``` - gỡ ra rồi parse."""
+    """LLM sometimes wraps JSON in ```...``` - strip it out before parsing."""
     text = text.strip()
     if text.startswith("```"):
         text = text.split("```")[1]
@@ -102,7 +102,7 @@ def write_issue(transcripts: dict) -> dict:
             raw = _call_groq(prompt)
         issue = _parse_json(raw)
     except Exception as e:
-        print(f"[issue_writer] LLM lỗi, trả issue rỗng: {e}")
+        print(f"[issue_writer] LLM error, returning empty issue: {e}")
         issue = {
             "title": "",
             "description": "",

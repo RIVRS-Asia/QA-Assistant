@@ -1,10 +1,10 @@
-"""Transcribe tiếng Việt - chạy song song 2 engine để so sánh:
+"""Vietnamese transcription - runs 2 engines in parallel for comparison:
 
-1. Gemini Flash: multimodal LLM, hiểu ngữ cảnh nên nhận giọng vùng miền +
-   thuật ngữ game tốt hơn.
-2. Groq Whisper large-v3: rẻ, nhanh, baseline để đối chiếu.
+1. Gemini Flash: multimodal LLM, understands context so it handles regional accents +
+   game terminology better.
+2. Groq Whisper large-v3: cheap, fast, baseline for cross-reference.
 
-Engine nào không có API key thì bỏ qua.
+Any engine without an API key is skipped.
 """
 from pathlib import Path
 
@@ -13,11 +13,11 @@ import requests
 import config
 
 TRANSCRIBE_PROMPT = (
-    "Đây là đoạn ghi âm một QA tester người Việt (có thể nói giọng Bắc/Trung/Nam) "
-    "đang mô tả lỗi (bug) khi chơi thử game Roblox. "
-    "Hãy chép lại CHÍNH XÁC những gì người này nói bằng tiếng Việt. "
-    "Giữ nguyên thuật ngữ game/tiếng Anh nếu có (ví dụ: spawn, lag, NPC, respawn). "
-    "Chỉ trả về nội dung transcript, không giải thích thêm."
+    "This is an audio recording of a Vietnamese QA tester (may speak Northern/Central/Southern accent) "
+    "describing a bug while playtesting a Roblox game. "
+    "Transcribe EXACTLY what this person said in Vietnamese. "
+    "Keep game/English terminology as-is (e.g. spawn, lag, NPC, respawn). "
+    "Return only the transcript content, no additional explanation."
 )
 
 
@@ -39,7 +39,7 @@ def transcribe_gemini(audio_path: Path) -> str | None:
         )
         return (response.text or "").strip()
     except Exception as e:
-        return f"[gemini lỗi: {e}]"
+        return f"[gemini error: {e}]"
 
 
 def transcribe_groq(audio_path: Path) -> str | None:
@@ -57,7 +57,7 @@ def transcribe_groq(audio_path: Path) -> str | None:
         resp.raise_for_status()
         return resp.json().get("text", "").strip()
     except Exception as e:
-        return f"[groq lỗi: {e}]"
+        return f"[groq error: {e}]"
 
 
 def transcribe_openai(audio_path: Path) -> str | None:
@@ -75,11 +75,11 @@ def transcribe_openai(audio_path: Path) -> str | None:
         resp.raise_for_status()
         return resp.json().get("text", "").strip()
     except Exception as e:
-        return f"[openai lỗi: {e}]"
+        return f"[openai error: {e}]"
 
 
 def transcribe_all(audio_path: Path) -> dict:
-    """Trả về {'gemini': ..., 'groq': ..., 'openai': ...} - None nếu engine không có key."""
+    """Returns {'gemini': ..., 'groq': ..., 'openai': ...} - None if an engine has no key."""
     return {
         "gemini": transcribe_gemini(audio_path),
         "groq": transcribe_groq(audio_path),

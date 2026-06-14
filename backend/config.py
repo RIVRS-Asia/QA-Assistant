@@ -1,4 +1,4 @@
-"""Cấu hình chung - đọc từ file .env ở thư mục gốc."""
+"""General configuration - read from .env file in the project root."""
 import os
 from pathlib import Path
 
@@ -25,16 +25,16 @@ OBS_PORT = int(os.getenv("OBS_PORT", "4455"))
 OBS_PASSWORD = os.getenv("OBS_PASSWORD", "")
 
 # Recording / markers
-RECORD_HOTKEY = os.getenv("RECORD_HOTKEY", "<ctrl>+<shift>+<f9>")    # bug kèm video clip
-CAPTURE_HOTKEY = os.getenv("CAPTURE_HOTKEY", "<ctrl>+<shift>+<f10>")  # bug kèm screenshot
+RECORD_HOTKEY = os.getenv("RECORD_HOTKEY", "<ctrl>+<shift>+<f9>")    # bug with video clip
+CAPTURE_HOTKEY = os.getenv("CAPTURE_HOTKEY", "<ctrl>+<shift>+<f10>")  # bug with screenshot
 MIC_AUDIO_STREAM = int(os.getenv("MIC_AUDIO_STREAM", "0"))
 
-# Record clip = PRE giây trước + POST giây sau lúc nhấn. OBS Max Replay Time phải >= PRE+POST.
-# (POST = thời gian đợi sau khi nhấn rồi mới lưu replay buffer, vì buffer chỉ chứa quá khứ.)
+# Record clip = PRE seconds before + POST seconds after the press. OBS Max Replay Time must be >= PRE+POST.
+# (POST = wait time after pressing before saving the replay buffer, because the buffer only holds the past.)
 RECORD_PRE_SECONDS = float(os.getenv("RECORD_PRE_SECONDS", "20"))
 RECORD_POST_SECONDS = float(os.getenv("RECORD_POST_SECONDS", "20"))
 
-# Jira (trống = mock mode)
+# Jira (empty = mock mode)
 JIRA_BASE_URL = os.getenv("JIRA_BASE_URL", "")
 JIRA_EMAIL = os.getenv("JIRA_EMAIL", "")
 JIRA_API_TOKEN = os.getenv("JIRA_API_TOKEN", "")

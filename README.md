@@ -1,45 +1,45 @@
 # Roblox QA Assistant (POC)
 
-Pipeline tự động hoá báo bug khi QA playtest game Roblox:
+Automated bug reporting pipeline for QA playtesting Roblox games:
 
 ```
-QA chơi game → gặp bug: mô tả bằng lời (tiếng Việt) + nhấn hotkey
-   Ctrl+Shift+F9  = VIDEO clip (20s trước + 20s sau)  |  Ctrl+Shift+F10 = SCREENSHOT (1 frame)
-→ OBS Replay Buffer: mỗi lần nhấn lưu 1 clip — KHÔNG record cả session
-→ Mỗi bug tự xử lý ngầm ngay: audio + (clip mp4 / frame ảnh) → transcribe (Gemini + Groq)
-→ LLM viết draft Jira issue tiếng Anh → hiện dần trong bảng Bugs
-→ UI review/sửa → push Jira (mock mode mặc định)
+QA plays game → encounters bug: describes verbally (in Vietnamese) + presses hotkey
+   Ctrl+Shift+F9  = VIDEO clip (20s before + 20s after)  |  Ctrl+Shift+F10 = SCREENSHOT (1 frame)
+→ OBS Replay Buffer: each press saves 1 clip — does NOT record the entire session
+→ Each bug is processed automatically in the background: audio + (mp4 clip / image frame) → transcribe (Gemini + Groq)
+→ LLM writes draft Jira issue in English → appears progressively in the Bugs table
+→ UI review/edit → push to Jira (mock mode by default)
 ```
 
-## Cấu trúc
+## Structure
 
 ```
 backend/            # Python 3 - FastAPI
   main.py           # API server (session control + drafts)
-  obs_controller.py # điều khiển OBS qua obs-websocket
-  hotkey_listener.py# hotkey toàn cục đánh dấu bug
-  jira_client.py    # push Jira (mock = ghi JSON)
+  obs_controller.py # controls OBS via obs-websocket
+  hotkey_listener.py# global hotkey to mark bugs
+  jira_client.py    # push to Jira (mock = write JSON)
   pipeline/
-    media.py        # ffmpeg: cắt audio, extract screenshot
-    transcribe.py   # Gemini + Groq (so sánh 2 engine)
+    media.py        # ffmpeg: trim audio, extract screenshot
+    transcribe.py   # Gemini + Groq (compare 2 engines)
     issue_writer.py # transcript VI -> Jira issue EN
 ui/                 # React (Vite) - session control + review drafts
-sessions/           # data mỗi session (tự tạo, gitignored)
+sessions/           # data per session (auto-created, gitignored)
 ```
 
-## Setup (1 lần)
+## Setup (one-time)
 
 ### 1. OBS
 
-- Cài [OBS Studio](https://obsproject.com/) + bật **Tools > WebSocket Server Settings > Enable** (note lại password).
-- Scene: thêm **Window Capture** trỏ vào cửa sổ Roblox (⚠️ KHÔNG dùng Game Capture — anti-cheat Byfron chặn, màn hình đen). Chạy Roblox ở windowed/borderless.
-- **Cấu hình video/recording + bật Replay Buffer**: xem [`docs/OBS_SETUP.md`](docs/OBS_SETUP.md). Tóm tắt: Output resolution = Base (không downscale), filter Lanczos, 30 FPS, Quality **HQ**, format **mp4**, **bật Replay Buffer (Max Replay Time ~40s)** — app chỉ lưu clip khi nhấn hotkey.
-- Tách track mic: **Settings > Output > Output Mode: Advanced > Recording > Audio Track** — nếu chỉ ghi mic vào track 1 thì giữ `MIC_AUDIO_STREAM=0` trong `.env`. Nếu track 1 = desktop, track 2 = mic thì đặt `MIC_AUDIO_STREAM=1`.
+- Install [OBS Studio](https://obsproject.com/) + enable **Tools > WebSocket Server Settings > Enable** (note the password).
+- Scene: add **Window Capture** pointing to the Roblox window (⚠️ do NOT use Game Capture — Byfron anti-cheat blocks it, black screen). Run Roblox in windowed/borderless mode.
+- **Configure video/recording + enable Replay Buffer**: see [`docs/OBS_SETUP.md`](docs/OBS_SETUP.md). Summary: Output resolution = Base (no downscale), Lanczos filter, 30 FPS, Quality **HQ**, format **mp4**, **enable Replay Buffer (Max Replay Time ~40s)** — app only saves a clip when hotkey is pressed.
+- Separate mic track: **Settings > Output > Output Mode: Advanced > Recording > Audio Track** — if only mic is recorded on track 1, keep `MIC_AUDIO_STREAM=0` in `.env`. If track 1 = desktop, track 2 = mic, set `MIC_AUDIO_STREAM=1`.
 
 ### 2. Backend
 
-Cần Python 3.10+. ffmpeg (dùng để cắt audio/video & chụp frame) đi kèm gói
-`imageio-ffmpeg` trong requirements — `pip install` là có, không cần cài thêm hay set PATH.
+Requires Python 3.10+. ffmpeg (used to trim audio/video & capture frames) is bundled with the
+`imageio-ffmpeg` package in requirements — `pip install` handles it, no additional installation or PATH setup needed.
 
 ```bash
 cd backend
@@ -47,14 +47,14 @@ python -m venv .venv && .venv\Scripts\activate   # Windows
 pip install -r requirements.txt
 ```
 
-### 3. Cấu hình
+### 3. Configuration
 
 ```bash
 copy .env.example .env
 ```
 
-Điền tối thiểu: `GEMINI_API_KEY` và/hoặc `GROQ_API_KEY`, `OBS_PASSWORD`.
-Jira để trống = mock mode (issue ghi ra `sessions/<id>/pushed_issues.json`).
+Minimum required: `GEMINI_API_KEY` and/or `GROQ_API_KEY`, `OBS_PASSWORD`.
+Leave Jira fields empty = mock mode (issues written to `sessions/<id>/pushed_issues.json`).
 
 ### 4. UI
 
@@ -63,9 +63,9 @@ cd ui
 npm install
 ```
 
-## Chạy
+## Running
 
-Terminal 1 (backend — cần quyền admin trên Windows để hotkey hoạt động khi game focus):
+Terminal 1 (backend — requires admin privileges on Windows for hotkeys to work when game is focused):
 
 ```bash
 cd backend && uvicorn main:app --port 8000
@@ -77,29 +77,29 @@ Terminal 2 (UI):
 cd ui && npm run dev
 ```
 
-Mở http://localhost:5173
+Open http://localhost:5173
 
-## Flow sử dụng (cho QA)
+## Usage Flow (for QA)
 
-1. Mở OBS (đúng scene), mở UI, kiểm tra chấm xanh "OBS đã kết nối".
-2. Bấm **Bắt đầu session test** → chơi game.
-3. Gặp bug → nói mô tả bug bằng lời (vị trí, điều gì xảy ra, cách tái hiện) → nhấn:
-   - `Ctrl+Shift+F9` nếu bug cần **video clip** (20s trước + 20s sau lúc nhấn)
-   - `Ctrl+Shift+F10` nếu bug chỉ cần **screenshot** (1 frame + transcript)
-   - Mỗi bug tự xử lý ngầm và hiện dần trong bảng **Bugs** (record mất ~20s+ vì đợi quay nốt 20s sau).
-4. Xong → **Kết thúc session** (đợi ~20s để bug record cuối quay xong).
-5. Mở bảng **Bugs** → click 1 bug → trang chi tiết (video/ảnh + transcript + issue tiếng Anh + link Jira), sửa nếu cần → **Push Jira**.
+1. Open OBS (correct scene), open UI, verify the green dot "OBS connected".
+2. Click **Start test session** → play the game.
+3. Encounter a bug → verbally describe the bug (location, what happened, how to reproduce) → press:
+   - `Ctrl+Shift+F9` if the bug needs a **video clip** (20s before + 20s after the press)
+   - `Ctrl+Shift+F10` if the bug only needs a **screenshot** (1 frame + transcript)
+   - Each bug is processed automatically in the background and appears progressively in the **Bugs** table (record takes ~20s+ because it waits for 20s of post-event footage).
+4. Done → **End session** (wait ~20s for the last bug recording to finish).
+5. Open the **Bugs** table → click a bug → detail page (video/image + transcript + English issue + Jira link), edit if needed → **Push to Jira**.
 
-## Ghi chú kỹ thuật
+## Technical Notes
 
-- Mỗi lần nhấn hotkey app gọi OBS `SaveReplayBuffer` qua obs-websocket. **Record** đợi `RECORD_POST_SECONDS` (20s) rồi mới lưu để clip có cả footage SAU lúc nhấn, sau đó cắt lấy `PRE+POST` giây cuối (20s trước + 20s sau). **Capture** lưu ngay, trích 1 frame. ⚠️ OBS Max Replay Time phải ≥ PRE+POST (40s).
-- Bug xử lý **ngay sau mỗi lần mark** trong thread riêng (không block) → transcript + issue hiện dần, không cần bấm "Xử lý session".
-- Transcript chạy cả Gemini + Groq để so sánh giọng vùng miền — xem mục "Transcript" trong UI, engine nào kém thì bỏ key đi là tắt.
-- Issue writer cross-reference 2 transcript để tự sửa lỗi ASR.
+- Each hotkey press calls OBS `SaveReplayBuffer` via obs-websocket. **Record** waits `RECORD_POST_SECONDS` (20s) before saving so the clip includes footage AFTER the press, then trims to the last `PRE+POST` seconds (20s before + 20s after). **Capture** saves immediately, extracts 1 frame. ⚠️ OBS Max Replay Time must be ≥ PRE+POST (40s).
+- Bugs are processed **immediately after each mark** in a separate thread (non-blocking) → transcript + issue appear progressively, no need to click "Process session".
+- Transcript runs both Gemini + Groq for comparison across regional accents — see the "Transcript" section in the UI; if one engine performs poorly, remove its key to disable it.
+- Issue writer cross-references both transcripts to self-correct ASR errors.
 
-## TODO sau POC
+## TODO after POC
 
-- [ ] Ingest log Roblox Studio theo timestamp
-- [ ] Attach video clip vào Jira issue
-- [ ] Auto-detect bug từ transcript khi QA quên nhấn hotkey
-- [ ] Dedupe với issue Jira có sẵn (JQL search)
+- [ ] Ingest Roblox Studio logs by timestamp
+- [ ] Attach video clip to Jira issue
+- [ ] Auto-detect bug from transcript when QA forgets to press hotkey
+- [ ] Deduplicate against existing Jira issues (JQL search)

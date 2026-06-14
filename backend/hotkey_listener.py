@@ -1,6 +1,6 @@
-"""Lắng nghe hotkey toàn cục để đánh dấu bug.
+"""Listens for global hotkeys to mark bugs.
 
-Mỗi lần nhấn = 1 bug. Khi nhấn, gọi callback on_marker(type) để lưu clip replay buffer.
+Each press = 1 bug. On press, calls callback on_marker(type) to save the replay buffer clip.
 """
 from pynput import keyboard
 
@@ -12,7 +12,7 @@ class HotkeyListener:
         self._listener = None
 
     def start(self, on_marker):
-        """on_marker(marker_type: str) được gọi mỗi lần nhấn hotkey (chạy trên thread của pynput)."""
+        """on_marker(marker_type: str) is called each time a hotkey is pressed (runs on pynput's thread)."""
         self._listener = keyboard.GlobalHotKeys({
             config.RECORD_HOTKEY: lambda: on_marker("record"),
             config.CAPTURE_HOTKEY: lambda: on_marker("capture"),

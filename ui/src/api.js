@@ -1,4 +1,4 @@
-// Gọi backend FastAPI (qua vite proxy /api)
+// Call FastAPI backend (via vite proxy /api)
 async function request(path, options = {}) {
   const res = await fetch(`/api${path}`, {
     headers: { 'Content-Type': 'application/json' },
