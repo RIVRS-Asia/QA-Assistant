@@ -45,6 +45,34 @@ def _format_transcripts(transcripts: dict) -> str:
     return "\n\n".join(parts) if parts else "(empty)"
 
 
+def _clean_transcript_text(text: str | None) -> str:
+    """Skip engine error markers like '[gemini error: ...]' and blank values."""
+    text = (text or "").strip()
+    if not text or text.startswith("["):
+        return ""
+    return text
+
+
+def _fallback_title(transcripts: dict, issue: dict) -> str:
+    """When the LLM gives no usable title, derive one from what the QA said so the web
+    title field is still auto-filled (transcript-only, no vision). Returns "" only when
+    there is genuinely nothing to summarise."""
+    summary = (issue.get("transcript_summary_vi") or "").strip()
+    if summary:
+        return _shorten(summary)
+    for engine in ("gemini", "openai", "groq"):
+        text = _clean_transcript_text(transcripts.get(engine))
+        if text:
+            first = text.replace("\n", " ").strip().split(". ")[0]
+            return _shorten(first)
+    return ""
+
+
+def _shorten(text: str, limit: int = 80) -> str:
+    text = text.strip().rstrip(".")
+    return text if len(text) <= limit else text[:limit].rstrip() + "…"
+
+
 def _call_gemini(prompt: str) -> str:
     from google import genai
 
@@ -110,4 +138,10 @@ def write_issue(transcripts: dict) -> dict:
             "severity": "",
             "transcript_summary_vi": "",
         }
+
+    # Always auto-fill a title for the web from the transcript when the LLM gave none
+    # (empty, or its "no bug" sentinel). Stays empty only if the QA said nothing usable.
+    title = (issue.get("title") or "").strip()
+    if not title or title == "NO_BUG_DETECTED":
+        issue["title"] = _fallback_title(transcripts, issue)
     return issue
