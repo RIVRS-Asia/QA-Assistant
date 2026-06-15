@@ -108,3 +108,5 @@ Open http://localhost:5173
 - [ ] Attach video clip to Jira issue
 - [ ] Auto-detect bug from transcript when QA forgets to press hotkey
 - [ ] Deduplicate against existing Jira issues (JQL search)
+- [ ] Multiple images per bug (QA's pre-tool habit was several stills per bug): extract extra frames from the video clip in the UI (scrub + "grab this frame"), and/or group `capture` presses within a short time window into one `bug_id`. `screenshots` is already a list and the UI already renders multiple.
+- [ ] Mark/annotate the bug location (QA used to circle the spot on the screenshot): auto via vision LLM — feed the frame + transcript to Gemini so it returns bounding-box coords and draws the circle; and/or a manual canvas overlay in `BugDetail` to circle/arrow before pushing to Jira.

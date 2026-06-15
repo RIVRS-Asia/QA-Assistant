@@ -16,15 +16,28 @@ them to correct ASR mistakes).
 Transcripts:
 {transcripts}
 
-Write a Jira bug report in English. Respond with ONLY valid JSON, no markdown fence:
+Write a Jira bug report in English following the studio's bug template. Respond with
+ONLY valid JSON, no markdown fence:
 {{
   "title": "concise bug title in English",
-  "description": "What happened, expected vs actual behavior. Markdown allowed.",
   "repro_steps": ["step 1", "step 2"],
-  "severity": "low | medium | high | critical",
+  "actual_result": "what actually happens (the bug)",
+  "expected_result": "what should happen instead",
+  "priority": "Low | Medium | High",
+  "labels": ["optional UPPER_SNAKE_CASE tags, e.g. MUST_FIX; [] if none"],
   "transcript_summary_vi": "tóm tắt 1-2 câu tiếng Việt những gì QA nói"
 }}
 If the transcript is empty or has no bug info, set title to "NO_BUG_DETECTED"."""
+
+EMPTY_ISSUE = {
+    "title": "",
+    "repro_steps": [],
+    "actual_result": "",
+    "expected_result": "",
+    "priority": "Medium",
+    "labels": [],
+    "transcript_summary_vi": "",
+}
 
 
 def _parse_json(text: str) -> dict:
@@ -113,13 +126,7 @@ def _call_openai(prompt: str) -> str:
 
 def write_issue(transcripts: dict) -> dict:
     if not (config.GEMINI_API_KEY or config.OPENAI_API_KEY or config.GROQ_API_KEY):
-        return {
-            "title": "",
-            "description": "",
-            "repro_steps": [],
-            "severity": "",
-            "transcript_summary_vi": "",
-        }
+        return dict(EMPTY_ISSUE)
     prompt = ISSUE_PROMPT.format(transcripts=_format_transcripts(transcripts))
     try:
         if config.GEMINI_API_KEY:
@@ -128,16 +135,10 @@ def write_issue(transcripts: dict) -> dict:
             raw = _call_openai(prompt)
         else:
             raw = _call_groq(prompt)
-        issue = _parse_json(raw)
+        issue = {**EMPTY_ISSUE, **_parse_json(raw)}
     except Exception as e:
         print(f"[issue_writer] LLM error, returning empty issue: {e}")
-        issue = {
-            "title": "",
-            "description": "",
-            "repro_steps": [],
-            "severity": "",
-            "transcript_summary_vi": "",
-        }
+        issue = dict(EMPTY_ISSUE)
 
     # Always auto-fill a title for the web from the transcript when the LLM gave none
     # (empty, or its "no bug" sentinel). Stays empty only if the QA said nothing usable.

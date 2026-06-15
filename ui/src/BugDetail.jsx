@@ -82,19 +82,25 @@ export default function BugDetail({ sessionId, bugId, onBack }) {
       <label>Title
         <input value={issue.title} onChange={(e) => set('title', e.target.value)} />
       </label>
-      <label>Description
-        <textarea rows={5} value={issue.description} onChange={(e) => set('description', e.target.value)} />
-      </label>
-      <label>Severity
-        <select value={issue.severity} onChange={(e) => set('severity', e.target.value)}>
-          {['low', 'medium', 'high', 'critical'].map((s) => <option key={s}>{s}</option>)}
-        </select>
-      </label>
       {issue.repro_steps?.length > 0 && (
-        <details>
+        <details open>
           <summary>Steps to reproduce</summary>
           <ol>{issue.repro_steps.map((s, i) => <li key={i}>{s}</li>)}</ol>
         </details>
+      )}
+      <label>Actual Result
+        <textarea rows={3} value={issue.actual_result || ''} onChange={(e) => set('actual_result', e.target.value)} />
+      </label>
+      <label>Expected Result
+        <textarea rows={3} value={issue.expected_result || ''} onChange={(e) => set('expected_result', e.target.value)} />
+      </label>
+      <label>Priority
+        <select value={issue.priority || 'Medium'} onChange={(e) => set('priority', e.target.value)}>
+          {['Low', 'Medium', 'High'].map((s) => <option key={s}>{s}</option>)}
+        </select>
+      </label>
+      {issue.labels?.length > 0 && (
+        <p className="muted">🏷 {issue.labels.join(', ')}</p>
       )}
       {issue.transcript_summary_vi && <p className="muted">🗣 {issue.transcript_summary_vi}</p>}
 

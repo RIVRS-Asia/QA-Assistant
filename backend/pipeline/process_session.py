@@ -15,8 +15,10 @@ def process_marker(session_dir: Path, bug_id: int, marker: dict) -> dict:
     clip_path = marker["clip_path"]
     marker_type = marker.get("type", "record")
 
+    window = config.RECORD_PRE_SECONDS + config.RECORD_POST_SECONDS
+
     try:
-        audio_path = media.extract_audio_clip(clip_path, session_dir / f"bug{bug_id}.wav")
+        audio_path = media.extract_audio_clip(clip_path, session_dir / f"bug{bug_id}.wav", window)
         transcripts = transcribe.transcribe_all(audio_path)
     except Exception as e:
         print(f"[bug {bug_id}] audio/transcribe error: {e}")
@@ -28,8 +30,7 @@ def process_marker(session_dir: Path, bug_id: int, marker: dict) -> dict:
     try:
         if marker_type == "capture":
             screenshots = [media.extract_frame(clip_path, session_dir / f"bug{bug_id}.jpg")]
-        else:  # record
-            window = config.RECORD_PRE_SECONDS + config.RECORD_POST_SECONDS
+        else:  # record - same window as the extracted audio above
             video_clip = media.save_video_clip(clip_path, session_dir / f"bug{bug_id}.mp4", window)
     except Exception as e:
         print(f"[bug {bug_id}] media error: {e}")

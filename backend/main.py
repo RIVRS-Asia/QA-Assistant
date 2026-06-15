@@ -201,7 +201,7 @@ def list_bugs():
                 "id": draft["id"],
                 "type": draft.get("type", "record"),
                 "title": draft["issue"].get("title", ""),
-                "severity": draft["issue"].get("severity", ""),
+                "priority": draft["issue"].get("priority", ""),
                 "status": draft["status"],
                 "jira_key": draft.get("jira_key", ""),
                 "jira_url": draft.get("jira_url", ""),
@@ -233,7 +233,7 @@ def get_session(session_id: str):
 
 @app.put("/api/sessions/{session_id}/drafts/{draft_id}")
 def update_draft(session_id: str, draft_id: int, issue: dict):
-    """UI edits title/description/severity before pushing (looked up by id, not index)."""
+    """UI edits title/repro_steps/actual+expected_result/priority before pushing (looked up by id, not index)."""
     session_dir = _session_dir(session_id)
     with _drafts_lock:
         drafts_file = session_dir / "drafts.json"

@@ -24,15 +24,26 @@ def _run(cmd: list[str]):
         raise RuntimeError(f"ffmpeg error: {result.stderr[-500:]}")
 
 
-def extract_audio_clip(clip_path: str, out_path: Path) -> Path:
-    """Extract the full MIC audio from the clip -> 16kHz mono wav (standard for ASR)."""
-    _run([
-        FFMPEG, "-y",
+def extract_audio_clip(clip_path: str, out_path: Path, seconds: float | None = None) -> Path:
+    """Extract the MIC audio from the clip -> 16kHz mono wav (standard for ASR).
+
+    `seconds` trims to the last N seconds (same PRE+POST window as the video clip) so the
+    audio length matches the saved mp4. None = keep the whole clip.
+
+    loudnorm normalizes the volume (EBU R128) so quiet mic recordings don't trigger
+    Whisper hallucinations (e.g. spurious "đăng ký kênh" on near-silent audio).
+    """
+    cmd = [FFMPEG, "-y"]
+    if seconds is not None:
+        cmd += ["-sseof", f"-{seconds}"]
+    cmd += [
         "-i", clip_path,
         "-map", f"0:a:{config.MIC_AUDIO_STREAM}",
+        "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
         "-ac", "1", "-ar", "16000",
         str(out_path),
-    ])
+    ]
+    _run(cmd)
     return out_path
 
 
