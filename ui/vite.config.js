@@ -7,7 +7,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': 'http://localhost:8000',
+      // ws: true so the /api/ws WebSocket is proxied to the backend too (live updates)
+      '/api': { target: 'http://localhost:8000', ws: true },
     },
   },
 })

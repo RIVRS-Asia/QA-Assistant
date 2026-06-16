@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
 import { api } from './api'
 
-export default function BugDetail({ sessionId, bugId, onBack }) {
+export default function BugDetail() {
+  const { sessionId, bugId: bugIdParam } = useParams()
+  const bugId = Number(bugIdParam)
+  const navigate = useNavigate()
+  const onBack = () => navigate(`/sessions/${sessionId}`)
   const [draft, setDraft] = useState(null)
   const [issue, setIssue] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -37,6 +42,14 @@ export default function BugDetail({ sessionId, bugId, onBack }) {
     load()
   }
 
+  const removeImage = async (filename) => {
+    if (!window.confirm('Gỡ ảnh này khỏi bug? Ảnh sẽ bị xóa và không khôi phục được.')) return
+    setBusy(true)
+    try { await api.deleteScreenshot(sessionId, bugId, filename) } catch (e) { setError(e.message) }
+    setBusy(false)
+    load()
+  }
+
   return (
     <div className="panel">
       <button className="link" onClick={onBack}>← Back</button>
@@ -55,11 +68,28 @@ export default function BugDetail({ sessionId, bugId, onBack }) {
         <video controls width="100%" src={api.fileUrl(sessionId, draft.video_clip)}
                style={{ maxHeight: 360, background: '#000' }} />
       )}
+      {(draft.screenshots || []).length > 0 && (
+        <p className="muted">{draft.screenshots.length} ảnh — bấm nút đỏ ở góc ảnh để gỡ ảnh gắn nhầm.</p>
+      )}
       <div className="screenshots">
         {(draft.screenshots || []).map((f) => (
-          <a key={f} href={api.fileUrl(sessionId, f)} target="_blank" rel="noreferrer">
-            <img src={api.fileUrl(sessionId, f)} alt={f} />
-          </a>
+          <div key={f} className="shot">
+            <a href={api.fileUrl(sessionId, f)} target="_blank" rel="noreferrer">
+              <img src={api.fileUrl(sessionId, f)} alt={f} />
+            </a>
+            {draft.status !== 'pushed' && (
+              <button className="img-del" title="Gỡ ảnh này khỏi bug" disabled={busy}
+                      onClick={() => removeImage(f)} aria-label="Xóa ảnh">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 6h18" />
+                  <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" />
+                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                  <path d="M10 11v6M14 11v6" />
+                </svg>
+              </button>
+            )}
+          </div>
         ))}
       </div>
       {!draft.video_clip && (draft.screenshots || []).length === 0 && (
@@ -72,8 +102,8 @@ export default function BugDetail({ sessionId, bugId, onBack }) {
         {Object.entries(draft.transcripts || {}).map(([engine, text]) =>
           text ? <p key={engine}><b>{engine}:</b> {text}</p> : null
         )}
-        {draft.audio
-          ? <audio controls src={api.fileUrl(sessionId, draft.audio)} />
+        {(draft.audios || []).length > 0
+          ? (draft.audios || []).map((a) => <audio key={a} controls src={api.fileUrl(sessionId, a)} style={{ display: 'block', marginTop: 4 }} />)
           : <p className="muted">No mic audio yet (ffmpeg is needed to extract it from the OBS clip).</p>}
       </details>
 

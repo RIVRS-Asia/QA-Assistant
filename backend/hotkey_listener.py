@@ -1,6 +1,9 @@
 """Listens for global hotkeys to mark bugs.
 
-Each press = 1 bug. On press, calls callback on_marker(type) to save the replay buffer clip.
+- record/capture press = start a NEW bug (and save the first clip/screenshot)
+- append press         = add another screenshot to the bug that is currently open
+
+On press, calls on_marker(type) where type is "record" | "capture" | "append".
 """
 from pynput import keyboard
 
@@ -16,6 +19,7 @@ class HotkeyListener:
         self._listener = keyboard.GlobalHotKeys({
             config.RECORD_HOTKEY: lambda: on_marker("record"),
             config.CAPTURE_HOTKEY: lambda: on_marker("capture"),
+            config.APPEND_HOTKEY: lambda: on_marker("append"),
         })
         self._listener.start()
 

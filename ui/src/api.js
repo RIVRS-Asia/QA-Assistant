@@ -23,5 +23,9 @@ export const api = {
     request(`/sessions/${id}/drafts/${draftId}`, { method: 'PUT', body: JSON.stringify(issue) }),
   pushDraft: (id, draftId) =>
     request(`/sessions/${id}/drafts/${draftId}/push`, { method: 'POST' }),
+  deleteScreenshot: (id, draftId, filename) =>
+    request(`/sessions/${id}/drafts/${draftId}/screenshots/${filename}`, { method: 'DELETE' }),
+  mergeDraft: (id, draftId, intoId) =>
+    request(`/sessions/${id}/drafts/${draftId}/merge`, { method: 'POST', body: JSON.stringify({ into_id: intoId }) }),
   fileUrl: (id, filename) => `/api/sessions/${id}/files/${filename}`,
 }

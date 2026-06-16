@@ -89,9 +89,11 @@ Open http://localhost:5173
 1. Open OBS (correct scene), open UI, verify the green dot "OBS connected".
 2. Click **Start test session** → play the game.
 3. Encounter a bug → verbally describe the bug (location, what happened, how to reproduce) → press:
-   - `Ctrl+Shift+F9` if the bug needs a **video clip** (20s before + 20s after the press)
-   - `Ctrl+Shift+F10` if the bug only needs a **screenshot** (1 frame + transcript)
-   - Each bug is processed automatically in the background and appears progressively in the **Bugs** table (record takes ~20s+ because it waits for 20s of post-event footage).
+   - `Ctrl+Shift+F9` to open a **new bug** with a **video clip** (20s before + 20s after the press)
+   - `Ctrl+Shift+F10` to open a **new bug** with a **screenshot** (1 frame + transcript)
+   - `Ctrl+Shift+F11` to add **another screenshot to the bug you just marked** (one bug, multiple images)
+   - **Listen for the beep** so you know the press registered and the clip was saved: two rising notes = new bug saved, one note = image added, low buzz = save failed (re-capture). The next new-bug press (F9/F10) closes the current bug.
+   - Each bug is processed automatically in the background and appears progressively in the **Bugs** table (record takes ~20s+ because it waits for 20s of post-event footage). The UI updates live over WebSocket — no polling.
 4. Done → **End session** (wait ~20s for the last bug recording to finish).
 5. Open the **Bugs** table → click a bug → detail page (video/image + transcript + English issue + Jira link), edit if needed → **Push to Jira**.
 
@@ -105,8 +107,8 @@ Open http://localhost:5173
 ## TODO after POC
 
 - [ ] Ingest Roblox Studio logs by timestamp
-- [ ] Attach video clip to Jira issue
+- [x] Attach video clip + all screenshots to Jira issue (`/rest/api/3/issue/{key}/attachments`)
 - [ ] Auto-detect bug from transcript when QA forgets to press hotkey
 - [ ] Deduplicate against existing Jira issues (JQL search)
-- [ ] Multiple images per bug (QA's pre-tool habit was several stills per bug): extract extra frames from the video clip in the UI (scrub + "grab this frame"), and/or group `capture` presses within a short time window into one `bug_id`. `screenshots` is already a list and the UI already renders multiple.
+- [x] Multiple images per bug — `APPEND_HOTKEY` (F11) attaches extra screenshots to the open bug; the bug is finalized into one draft (screenshots list + concatenated transcript). UI has a gallery with per-image delete and a "merge into previous bug" button to fix mis-grouping.
 - [ ] Mark/annotate the bug location (QA used to circle the spot on the screenshot): auto via vision LLM — feed the frame + transcript to Gemini so it returns bounding-box coords and draws the circle; and/or a manual canvas overlay in `BugDetail` to circle/arrow before pushing to Jira.
