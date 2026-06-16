@@ -31,6 +31,9 @@ sessions/           # data per session (auto-created, gitignored)
 
 ## Setup (one-time)
 
+> Delivering to another machine with minimal steps? See [`docs/DELIVERY.md`](docs/DELIVERY.md)
+> (`setup.bat` + `run.bat`, UI served by the backend, OBS config bundled — no Node needed).
+
 ### 1. OBS
 
 - Install [OBS Studio](https://obsproject.com/) + enable **Tools > WebSocket Server Settings > Enable** (note the password).

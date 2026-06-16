@@ -558,3 +558,19 @@ def get_file(session_id: str, filename: str):
     if not path.exists():
         raise HTTPException(404)
     return FileResponse(path)
+
+
+# ===== Serve the built React UI (production / single-machine delivery) =====
+# In dev the UI runs on Vite (:5173) and proxies /api here, so ui/dist may not exist
+# and this block is skipped. When delivered with a build present, the backend serves
+# everything from :8000 so the target machine needs no Node.
+_UI_DIST = Path(__file__).resolve().parent.parent / "ui" / "dist"
+if (_UI_DIST / "index.html").exists():
+    @app.get("/{full_path:path}")
+    def serve_ui(full_path: str):
+        if full_path.startswith("api/"):
+            raise HTTPException(404)  # unmatched API route - don't mask it with index.html
+        candidate = _UI_DIST / full_path
+        if full_path and candidate.is_file():
+            return FileResponse(candidate)  # hashed assets, favicon, etc.
+        return FileResponse(_UI_DIST / "index.html")  # SPA fallback for deep links (/sessions/*)
