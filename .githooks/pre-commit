@@ -1,0 +1,9 @@
+#!/bin/sh
+# Rebuild ui/dist when UI source changes, so the built assets ship in the same commit.
+# ponytail: only fires when ui/ (excluding dist) is staged; skip the build otherwise.
+if git diff --cached --name-only | grep -q '^ui/' && \
+   git diff --cached --name-only | grep -vq '^ui/dist/'; then
+    echo "pre-commit: ui/ changed, rebuilding ui/dist..."
+    ( cd ui && npm run build ) || { echo "pre-commit: ui build failed"; exit 1; }
+    git add ui/dist
+fi

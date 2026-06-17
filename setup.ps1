@@ -30,7 +30,7 @@ if (-not (Test-Path $venvPy)) {
     Info 'Creating virtual environment (backend\.venv)...'
     python -m venv $venv
 }
-Info 'Installing backend dependencies (this also downloads ffmpeg, ~70MB, needs internet)...'
+Info 'Installing backend dependencies (imageio-ffmpeg bundles ffmpeg, downloaded automatically ~70MB - needs internet)...'
 & $venvPy -m pip install --upgrade pip --quiet
 & $venvPy -m pip install -r (Join-Path $root 'backend\requirements.txt')
 Ok 'Backend dependencies installed.'
@@ -69,6 +69,7 @@ if (Test-Path $envFile) {
 
 # ---------- 5. OBS config ----------
 Info 'Setting up OBS config...'
+Warn 'Bundled config was made with OBS 32.1.2 - use the same version to avoid compatibility issues.'
 $obsDir = Join-Path $env:APPDATA 'obs-studio'
 if (-not (Test-Path $obsDir)) {
     Warn "Default OBS folder not found at $obsDir"

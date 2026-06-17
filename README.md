@@ -4,7 +4,7 @@ Automated bug reporting pipeline for QA playtesting Roblox games:
 
 ```
 QA plays game → encounters bug: describes verbally (in Vietnamese) + presses hotkey
-   Ctrl+Shift+F9  = VIDEO clip (20s before + 20s after)  |  Ctrl+Shift+F10 = SCREENSHOT (1 frame)
+   Ctrl+Shift+F9  = VIDEO clip (20s before + 20s after)  |  Alt+B = SCREENSHOT (1 frame)  |  Alt+A = append screenshot
 → OBS Replay Buffer: each press saves 1 clip — does NOT record the entire session
 → Each bug is processed automatically in the background: audio + (mp4 clip / image frame)
   → transcribe (Gemini / Groq Whisper / OpenAI Whisper — any combination, run in parallel)
@@ -93,9 +93,9 @@ Open http://localhost:5173
 2. Click **Start test session** → play the game.
 3. Encounter a bug → verbally describe the bug (location, what happened, how to reproduce) → press:
    - `Ctrl+Shift+F9` to open a **new bug** with a **video clip** (20s before + 20s after the press)
-   - `Ctrl+Shift+F10` to open a **new bug** with a **screenshot** (1 frame + transcript)
-   - `Ctrl+Shift+F11` to add **another screenshot to the bug you just marked** (one bug, multiple images)
-   - **Listen for the beep** so you know the press registered and the clip was saved: two rising notes = new bug saved, one note = image added, low buzz = save failed (re-capture). The next new-bug press (F9/F10) closes the current bug.
+   - `Alt+B` (**B**ug) to open a **new bug** with a **screenshot** (1 frame + transcript)
+   - `Alt+A` (**A**ppend) to add **another screenshot to the bug you just marked** (one bug, multiple images)
+   - **Listen for the beep** so you know the press registered and the clip was saved: two rising notes = new bug saved, one note = image added, low buzz = save failed (re-capture). The next new-bug press (F9/Alt+B) closes the current bug.
    - Each bug is processed automatically in the background and appears progressively in the **Bugs** table (record takes ~20s+ because it waits for 20s of post-event footage). The UI updates live over WebSocket — no polling.
 4. Done → **End session** (wait ~20s for the last bug recording to finish).
 5. Open the **Bugs** table → click a bug → detail page (video/image + transcript + English issue + Jira link), edit if needed → **Push to Jira**.
@@ -113,5 +113,5 @@ Open http://localhost:5173
 - [x] Attach video clip + all screenshots to Jira issue (`/rest/api/3/issue/{key}/attachments`)
 - [ ] Auto-detect bug from transcript when QA forgets to press hotkey
 - [ ] Deduplicate against existing Jira issues (JQL search)
-- [x] Multiple images per bug — `APPEND_HOTKEY` (F11) attaches extra screenshots to the open bug; the bug is finalized into one draft (screenshots list + concatenated transcript). UI has a gallery with per-image delete and a "merge into previous bug" button to fix mis-grouping.
+- [x] Multiple images per bug — `APPEND_HOTKEY` (Alt+A) attaches extra screenshots to the open bug; the bug is finalized into one draft (screenshots list + concatenated transcript). UI has a gallery with per-image delete and a "merge into previous bug" button to fix mis-grouping.
 - [ ] Mark/annotate the bug location (QA used to circle the spot on the screenshot): auto via vision LLM — feed the frame + transcript to Gemini so it returns bounding-box coords and draws the circle; and/or a manual canvas overlay in `BugDetail` to circle/arrow before pushing to Jira.

@@ -7,11 +7,12 @@ served by the backend).
 ## Steps on the target machine
 
 1. **Get the code** — `git clone <repo>` (or copy the folder). Make sure `ui/dist/` is included.
-2. **Install OBS** — [obsproject.com](https://obsproject.com/). Open it once so it creates its
-   config folder, then **close it completely**.
+2. **Install OBS — version 32.1.2** (the bundled config was made with this version; use the same
+   one to avoid compatibility issues). [obsproject.com](https://obsproject.com/). Open it once so
+   it creates its config folder, then **close it completely**.
 3. **Run `setup.bat`** (double-click). It will:
    - install Python via winget if missing, create `backend\.venv`, install dependencies
-     (ffmpeg is downloaded automatically — needs internet);
+     (`imageio-ffmpeg` bundles ffmpeg — it downloads automatically during `pip install`, no manual ffmpeg install needed; requires internet, ~70 MB);
    - ask for your transcription **API key(s)** (Gemini / Groq / OpenAI — at least one) and write `.env`;
    - copy the bundled **OBS profile + scene collection + WebSocket config** into `%APPDATA%\obs-studio`
      (the OBS password is pre-matched to `.env`, so no mismatch).
