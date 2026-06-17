@@ -13,7 +13,7 @@ import config
 
 def push_issue(session_dir: Path, draft: dict) -> dict:
     if config.JIRA_ENABLED:
-        return _push_real(draft)
+        return _push_real(session_dir, draft)
     return _push_mock(session_dir, draft)
 
 
@@ -93,7 +93,37 @@ def _push_mock(session_dir: Path, draft: dict) -> dict:
     return {"key": fake_key, "mock": True}
 
 
-def _push_real(draft: dict) -> dict:
+def _attachment_files(session_dir: Path, draft: dict) -> list[Path]:
+    """All media to attach: every screenshot + the video clip (if any), in a stable order."""
+    names = list(draft.get("screenshots", []))
+    if draft.get("video_clip"):
+        names.append(draft["video_clip"])
+    paths = []
+    for name in names:
+        p = session_dir / Path(name).name
+        if p.exists():
+            paths.append(p)
+    return paths
+
+
+def _upload_attachments(issue_key: str, session_dir: Path, draft: dict):
+    """Upload all of the bug's screenshots/video to the Jira issue. Best-effort: a failed
+    attachment must not fail the whole push (the issue itself is already created)."""
+    for path in _attachment_files(session_dir, draft):
+        try:
+            with open(path, "rb") as f:
+                requests.post(
+                    f"{config.JIRA_BASE_URL}/rest/api/3/issue/{issue_key}/attachments",
+                    auth=(config.JIRA_EMAIL, config.JIRA_API_TOKEN),
+                    headers={"X-Atlassian-Token": "no-check"},  # required by Jira for attachments
+                    files={"file": (path.name, f)},
+                    timeout=60,
+                ).raise_for_status()
+        except Exception as e:
+            print(f"[jira] attachment {path.name} failed: {e}")
+
+
+def _push_real(session_dir: Path, draft: dict) -> dict:
     resp = requests.post(
         f"{config.JIRA_BASE_URL}/rest/api/3/issue",
         auth=(config.JIRA_EMAIL, config.JIRA_API_TOKEN),
@@ -102,4 +132,5 @@ def _push_real(draft: dict) -> dict:
     )
     resp.raise_for_status()
     key = resp.json()["key"]
+    _upload_attachments(key, session_dir, draft)
     return {"key": key, "url": f"{config.JIRA_BASE_URL}/browse/{key}", "mock": False}

@@ -1,11 +1,37 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import * as markerjs2 from 'markerjs2'
+import Lightbox from 'yet-another-react-lightbox'
+import Zoom from 'yet-another-react-lightbox/plugins/zoom'
+import 'yet-another-react-lightbox/styles.css'
 import { api } from './api'
 
-export default function BugDetail({ sessionId, bugId, onBack }) {
+export default function BugDetail() {
+  const { sessionId, bugId: bugIdParam } = useParams()
+  const bugId = Number(bugIdParam)
+  const navigate = useNavigate()
+  const onBack = () => navigate(`/sessions/${sessionId}`)
   const [draft, setDraft] = useState(null)
   const [issue, setIssue] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [ver, setVer] = useState({})        // cache-bust per filename after annotating
+  const [lightbox, setLightbox] = useState(-1)  // open screenshot index, -1 = closed
+  const imgRefs = useRef({})
+
+  const annotate = (f) => {
+    const img = imgRefs.current[f]
+    if (!img) return
+    const ma = new markerjs2.MarkerArea(img)
+    ma.settings.displayMode = 'popup'
+    ma.renderAtNaturalSize = true        // export at original resolution, not the scaled-down on-screen size
+    ma.renderImageType = 'image/png'     // lossless
+    ma.addEventListener('render', async (ev) => {
+      try { await api.saveAnnotation(sessionId, f, ev.dataUrl) } catch (e) { setError(e.message) }
+      setVer((v) => ({ ...v, [f]: (v[f] || 0) + 1 }))  // force <img> reload
+    })
+    ma.show()
+  }
 
   const load = async () => {
     try {
@@ -37,6 +63,14 @@ export default function BugDetail({ sessionId, bugId, onBack }) {
     load()
   }
 
+  const removeImage = async (filename) => {
+    if (!window.confirm('Gỡ ảnh này khỏi bug? Ảnh sẽ bị xóa và không khôi phục được.')) return
+    setBusy(true)
+    try { await api.deleteScreenshot(sessionId, bugId, filename) } catch (e) { setError(e.message) }
+    setBusy(false)
+    load()
+  }
+
   return (
     <div className="panel">
       <button className="link" onClick={onBack}>← Back</button>
@@ -52,16 +86,46 @@ export default function BugDetail({ sessionId, bugId, onBack }) {
 
       {/* Video clip (record) or image (capture) */}
       {draft.video_clip && (
-        <video controls width="100%" src={api.fileUrl(sessionId, draft.video_clip)}
-               style={{ maxHeight: 360, background: '#000' }} />
+        <div className="shot" style={{ display: 'block' }}>
+          <video controls width="100%" src={api.fileUrl(sessionId, draft.video_clip)}
+                 style={{ maxHeight: 360, background: '#000' }} />
+          <a className="img-dl" style={{ right: 5 }} href={api.fileUrl(sessionId, draft.video_clip)}
+             download={draft.video_clip} title="Tải video về" aria-label="Download">⬇</a>
+        </div>
+      )}
+      {(draft.screenshots || []).length > 0 && (
+        <p className="muted">{draft.screenshots.length} ảnh — bấm nút đỏ ở góc ảnh để gỡ ảnh gắn nhầm.</p>
       )}
       <div className="screenshots">
-        {(draft.screenshots || []).map((f) => (
-          <a key={f} href={api.fileUrl(sessionId, f)} target="_blank" rel="noreferrer">
-            <img src={api.fileUrl(sessionId, f)} alt={f} />
-          </a>
+        {(draft.screenshots || []).map((f, i) => (
+          <div key={f} className="shot">
+            <img ref={(el) => { imgRefs.current[f] = el }} style={{ cursor: 'zoom-in' }}
+                 onClick={() => setLightbox(i)}
+                 src={`${api.fileUrl(sessionId, f)}?v=${ver[f] || 0}`} alt={f} crossOrigin="anonymous" />
+            <a className="img-dl" href={`${api.fileUrl(sessionId, f)}?v=${ver[f] || 0}`}
+               download={f} title="Tải ảnh về" aria-label="Download">⬇</a>
+            {draft.status !== 'pushed' && (
+              <button className="img-edit" title="Vẽ chú thích lên ảnh" disabled={busy}
+                      onClick={() => annotate(f)} aria-label="Annotate">✏️</button>
+            )}
+            {draft.status !== 'pushed' && (
+              <button className="img-del" title="Gỡ ảnh này khỏi bug" disabled={busy}
+                      onClick={() => removeImage(f)} aria-label="Xóa ảnh">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 6h18" />
+                  <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" />
+                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                  <path d="M10 11v6M14 11v6" />
+                </svg>
+              </button>
+            )}
+          </div>
         ))}
       </div>
+      <Lightbox open={lightbox >= 0} index={Math.max(0, lightbox)} close={() => setLightbox(-1)}
+                plugins={[Zoom]}
+                slides={(draft.screenshots || []).map((f) => ({ src: `${api.fileUrl(sessionId, f)}?v=${ver[f] || 0}` }))} />
       {!draft.video_clip && (draft.screenshots || []).length === 0 && (
         <p className="muted">No {draft.type === 'capture' ? 'image' : 'video'} yet — check that ffmpeg is installed & in PATH.</p>
       )}
@@ -72,8 +136,8 @@ export default function BugDetail({ sessionId, bugId, onBack }) {
         {Object.entries(draft.transcripts || {}).map(([engine, text]) =>
           text ? <p key={engine}><b>{engine}:</b> {text}</p> : null
         )}
-        {draft.audio
-          ? <audio controls src={api.fileUrl(sessionId, draft.audio)} />
+        {(draft.audios || []).length > 0
+          ? (draft.audios || []).map((a) => <audio key={a} controls src={api.fileUrl(sessionId, a)} style={{ display: 'block', marginTop: 4 }} />)
           : <p className="muted">No mic audio yet (ffmpeg is needed to extract it from the OBS clip).</p>}
       </details>
 

@@ -3,5 +3,4 @@ sessions/
 __pycache__/
 *.pyc
 node_modules/
-ui/dist/
 .venv/

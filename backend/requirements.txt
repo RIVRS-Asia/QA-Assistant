@@ -1,7 +1,7 @@
 fastapi
 uvicorn[standard]
 python-dotenv
-pynput
+keyboard
 obsws-python
 google-genai
 requests
