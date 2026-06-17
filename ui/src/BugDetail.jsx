@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import * as markerjs2 from 'markerjs2'
 import { api } from './api'
 
 export default function BugDetail() {
@@ -11,6 +12,22 @@ export default function BugDetail() {
   const [issue, setIssue] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [ver, setVer] = useState({})        // cache-bust per filename after annotating
+  const imgRefs = useRef({})
+
+  const annotate = (f) => {
+    const img = imgRefs.current[f]
+    if (!img) return
+    const ma = new markerjs2.MarkerArea(img)
+    ma.settings.displayMode = 'popup'
+    ma.renderAtNaturalSize = true        // export at original resolution, not the scaled-down on-screen size
+    ma.renderImageType = 'image/png'     // lossless
+    ma.addEventListener('render', async (ev) => {
+      try { await api.saveAnnotation(sessionId, f, ev.dataUrl) } catch (e) { setError(e.message) }
+      setVer((v) => ({ ...v, [f]: (v[f] || 0) + 1 }))  // force <img> reload
+    })
+    ma.show()
+  }
 
   const load = async () => {
     try {
@@ -74,9 +91,14 @@ export default function BugDetail() {
       <div className="screenshots">
         {(draft.screenshots || []).map((f) => (
           <div key={f} className="shot">
-            <a href={api.fileUrl(sessionId, f)} target="_blank" rel="noreferrer">
-              <img src={api.fileUrl(sessionId, f)} alt={f} />
+            <a href={`${api.fileUrl(sessionId, f)}?v=${ver[f] || 0}`} target="_blank" rel="noreferrer">
+              <img ref={(el) => { imgRefs.current[f] = el }}
+                   src={`${api.fileUrl(sessionId, f)}?v=${ver[f] || 0}`} alt={f} crossOrigin="anonymous" />
             </a>
+            {draft.status !== 'pushed' && (
+              <button className="img-edit" title="Vẽ chú thích lên ảnh" disabled={busy}
+                      onClick={() => annotate(f)} aria-label="Annotate">✏️</button>
+            )}
             {draft.status !== 'pushed' && (
               <button className="img-del" title="Gỡ ảnh này khỏi bug" disabled={busy}
                       onClick={() => removeImage(f)} aria-label="Xóa ảnh">

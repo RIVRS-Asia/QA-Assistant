@@ -12,6 +12,7 @@ A bug is written as ONE draft (with a list of screenshots) once all its parts fi
 import asyncio
 import json
 import queue
+import base64
 import threading
 import time
 from datetime import datetime
@@ -549,6 +550,21 @@ def push_draft(session_id: str, draft_id: int):
         drafts_file.write_text(json.dumps(drafts, ensure_ascii=False, indent=2), encoding="utf-8")
     ws_manager.notify()
     return result
+
+
+@app.put("/api/sessions/{session_id}/files/{filename}/annotate")
+def annotate_screenshot(session_id: str, filename: str, body: dict):
+    """Overwrite a screenshot with its annotated version (PNG data URL from marker.js)."""
+    name = Path(filename).name  # block path traversal
+    path = _session_dir(session_id) / name
+    if not path.exists():
+        raise HTTPException(404)
+    data_url = body.get("dataUrl", "")
+    if "," not in data_url:
+        raise HTTPException(400, "dataUrl required")
+    path.write_bytes(base64.b64decode(data_url.split(",", 1)[1]))
+    ws_manager.notify()
+    return {"ok": True}
 
 
 @app.get("/api/sessions/{session_id}/files/{filename}")

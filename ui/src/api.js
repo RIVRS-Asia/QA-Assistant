@@ -28,4 +28,6 @@ export const api = {
   mergeDraft: (id, draftId, intoId) =>
     request(`/sessions/${id}/drafts/${draftId}/merge`, { method: 'POST', body: JSON.stringify({ into_id: intoId }) }),
   fileUrl: (id, filename) => `/api/sessions/${id}/files/${filename}`,
+  saveAnnotation: (id, filename, dataUrl) =>
+    request(`/sessions/${id}/files/${filename}/annotate`, { method: 'PUT', body: JSON.stringify({ dataUrl }) }),
 }
