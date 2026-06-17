@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import * as markerjs2 from 'markerjs2'
+import Lightbox from 'yet-another-react-lightbox'
+import Zoom from 'yet-another-react-lightbox/plugins/zoom'
+import 'yet-another-react-lightbox/styles.css'
 import { api } from './api'
 
 export default function BugDetail() {
@@ -13,6 +16,7 @@ export default function BugDetail() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [ver, setVer] = useState({})        // cache-bust per filename after annotating
+  const [lightbox, setLightbox] = useState(-1)  // open screenshot index, -1 = closed
   const imgRefs = useRef({})
 
   const annotate = (f) => {
@@ -82,19 +86,24 @@ export default function BugDetail() {
 
       {/* Video clip (record) or image (capture) */}
       {draft.video_clip && (
-        <video controls width="100%" src={api.fileUrl(sessionId, draft.video_clip)}
-               style={{ maxHeight: 360, background: '#000' }} />
+        <div className="shot" style={{ display: 'block' }}>
+          <video controls width="100%" src={api.fileUrl(sessionId, draft.video_clip)}
+                 style={{ maxHeight: 360, background: '#000' }} />
+          <a className="img-dl" style={{ right: 5 }} href={api.fileUrl(sessionId, draft.video_clip)}
+             download={draft.video_clip} title="Tải video về" aria-label="Download">⬇</a>
+        </div>
       )}
       {(draft.screenshots || []).length > 0 && (
         <p className="muted">{draft.screenshots.length} ảnh — bấm nút đỏ ở góc ảnh để gỡ ảnh gắn nhầm.</p>
       )}
       <div className="screenshots">
-        {(draft.screenshots || []).map((f) => (
+        {(draft.screenshots || []).map((f, i) => (
           <div key={f} className="shot">
-            <a href={`${api.fileUrl(sessionId, f)}?v=${ver[f] || 0}`} target="_blank" rel="noreferrer">
-              <img ref={(el) => { imgRefs.current[f] = el }}
-                   src={`${api.fileUrl(sessionId, f)}?v=${ver[f] || 0}`} alt={f} crossOrigin="anonymous" />
-            </a>
+            <img ref={(el) => { imgRefs.current[f] = el }} style={{ cursor: 'zoom-in' }}
+                 onClick={() => setLightbox(i)}
+                 src={`${api.fileUrl(sessionId, f)}?v=${ver[f] || 0}`} alt={f} crossOrigin="anonymous" />
+            <a className="img-dl" href={`${api.fileUrl(sessionId, f)}?v=${ver[f] || 0}`}
+               download={f} title="Tải ảnh về" aria-label="Download">⬇</a>
             {draft.status !== 'pushed' && (
               <button className="img-edit" title="Vẽ chú thích lên ảnh" disabled={busy}
                       onClick={() => annotate(f)} aria-label="Annotate">✏️</button>
@@ -114,6 +123,9 @@ export default function BugDetail() {
           </div>
         ))}
       </div>
+      <Lightbox open={lightbox >= 0} index={Math.max(0, lightbox)} close={() => setLightbox(-1)}
+                plugins={[Zoom]}
+                slides={(draft.screenshots || []).map((f) => ({ src: `${api.fileUrl(sessionId, f)}?v=${ver[f] || 0}` }))} />
       {!draft.video_clip && (draft.screenshots || []).length === 0 && (
         <p className="muted">No {draft.type === 'capture' ? 'image' : 'video'} yet — check that ffmpeg is installed & in PATH.</p>
       )}

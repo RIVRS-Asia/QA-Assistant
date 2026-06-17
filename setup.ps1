@@ -72,8 +72,14 @@ Info 'Setting up OBS config...'
 Warn 'Bundled config was made with OBS 32.1.2 - use the same version to avoid compatibility issues.'
 $obsDir = Join-Path $env:APPDATA 'obs-studio'
 if (-not (Test-Path $obsDir)) {
-    Warn "Default OBS folder not found at $obsDir"
-    $obsDir = Read-Host '    Enter your OBS config folder path (or run OBS once, then re-run setup)'
+    Warn "OBS does not appear to be installed (no config folder at $obsDir)."
+    Write-Host ''
+    Write-Host '    OBS Studio is required for screen recording. Please install OBS 32.1.2:' -ForegroundColor Yellow
+    Write-Host '    https://cdn-fastly.obsproject.com/downloads/OBS-Studio-32.1.2-Windows-x64-Installer.exe' -ForegroundColor Cyan
+    Write-Host '    After installing, open OBS once (so it creates its config folder), close it, then run setup.bat again.' -ForegroundColor Yellow
+    Write-Host ''
+    $obsDir = Read-Host '    Already installed? Enter your OBS config folder path, or press Enter to exit'
+    if (-not $obsDir) { return }
     if (-not (Test-Path $obsDir)) { throw "OBS folder not found: $obsDir" }
 }
 if (Get-Process obs64, obs -ErrorAction SilentlyContinue) {
