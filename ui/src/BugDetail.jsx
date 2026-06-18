@@ -17,6 +17,7 @@ export default function BugDetail() {
   const [error, setError] = useState('')
   const [ver, setVer] = useState({})        // cache-bust per filename after annotating
   const [lightbox, setLightbox] = useState(-1)  // open screenshot index, -1 = closed
+  const [copied, setCopied] = useState(false)
   const imgRefs = useRef({})
 
   const annotate = (f) => {
@@ -79,7 +80,6 @@ export default function BugDetail() {
     } catch (e) { setError(e.message) }
   }
 
-  const [copied, setCopied] = useState(false)
   const copyText = async () => {
     const lines = [
       `Bug Display: ${issue.title || ''}`,
@@ -176,10 +176,10 @@ export default function BugDetail() {
       </details>
 
       {/* Text extracted by LLM from transcript = issue (editable) */}
-      <h3 style={{ fontSize: 14, margin: '14px 0 4px' }}>
+      <h3 style={{ fontSize: 14, margin: '14px 0 4px', display: 'flex', alignItems: 'center' }}>
         Issue (LLM-generated from transcript)
-        <button type="button" className="link" title="Copy nội dung (không gồm ảnh) để dán vào Jira"
-                onClick={copyText} style={{ marginLeft: 8 }}>{copied ? '✓ Đã copy' : '📋 Copy'}</button>
+        <button type="button" className="copy-btn" title="Copy nội dung (không gồm ảnh) để dán vào Jira"
+                onClick={copyText} style={{ marginLeft: 'auto' }}>{copied ? '✓ Đã copy' : '📋 Copy'}</button>
       </h3>
       <label>Title
         <input value={issue.title} onChange={(e) => set('title', e.target.value)} />
