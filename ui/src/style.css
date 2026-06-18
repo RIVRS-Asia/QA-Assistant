@@ -109,6 +109,14 @@ kbd { background: #262b35; border: 1px solid #353c49; border-radius: 4px; paddin
   transition: background .15s, transform .1s;
 }
 .img-copy:hover { background: #a78bfa; transform: scale(1.12); }
+
+/* Copy-text button next to the Issue heading */
+.copy-btn {
+  padding: 4px 10px; font-size: 12px; line-height: 1;
+  background: #8b5cf6; color: #fff; border: none; border-radius: 5px;
+  cursor: pointer; transition: background .15s;
+}
+.copy-btn:hover { background: #a78bfa; }
 details { margin: 10px 0; font-size: 13px; }
 summary { cursor: pointer; color: #8b93a3; }
 audio { width: 100%; margin-top: 8px; }

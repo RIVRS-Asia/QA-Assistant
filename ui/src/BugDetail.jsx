@@ -17,6 +17,7 @@ export default function BugDetail() {
   const [error, setError] = useState('')
   const [ver, setVer] = useState({})        // cache-bust per filename after annotating
   const [lightbox, setLightbox] = useState(-1)  // open screenshot index, -1 = closed
+  const [copied, setCopied] = useState(false)
   const imgRefs = useRef({})
 
   const annotate = (f) => {
@@ -79,18 +80,32 @@ export default function BugDetail() {
     } catch (e) { setError(e.message) }
   }
 
-  const [copied, setCopied] = useState(false)
   const copyText = async () => {
-    const lines = [
+    const esc = (s) => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    const steps = issue.repro_steps || []
+    const plain = [
       `Bug Display: ${issue.title || ''}`,
       'Step to reproduce:',
-      ...(issue.repro_steps || []).map((s, i) => `${i + 1}. ${s}`),
+      ...steps.map((s, i) => `${i + 1}. ${s}`),
       'Actual Result:',
       issue.actual_result || '',
       'Expect Result:',
       issue.expected_result || '',
-    ]
-    await navigator.clipboard.writeText(lines.join('\n'))
+    ].join('\n')
+    const html =
+      `<p><strong>Bug Display:</strong> ${esc(issue.title)}</p>` +
+      `<p><strong>Step to reproduce:</strong></p>` +
+      `<ol>${steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ol>` +
+      `<p><strong>Actual Result:</strong><br>${esc(issue.actual_result)}</p>` +
+      `<p><strong>Expect Result:</strong><br>${esc(issue.expected_result)}</p>`
+    try {
+      await navigator.clipboard.write([new ClipboardItem({
+        'text/html': new Blob([html], { type: 'text/html' }),
+        'text/plain': new Blob([plain], { type: 'text/plain' }),
+      })])
+    } catch {
+      await navigator.clipboard.writeText(plain)  // fallback nếu trình duyệt không hỗ trợ ClipboardItem
+    }
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
   }
@@ -176,10 +191,10 @@ export default function BugDetail() {
       </details>
 
       {/* Text extracted by LLM from transcript = issue (editable) */}
-      <h3 style={{ fontSize: 14, margin: '14px 0 4px' }}>
+      <h3 style={{ fontSize: 14, margin: '14px 0 4px', display: 'flex', alignItems: 'center' }}>
         Issue (LLM-generated from transcript)
-        <button type="button" className="link" title="Copy nội dung (không gồm ảnh) để dán vào Jira"
-                onClick={copyText} style={{ marginLeft: 8 }}>{copied ? '✓ Đã copy' : '📋 Copy'}</button>
+        <button type="button" className="copy-btn" title="Copy nội dung (không gồm ảnh) để dán vào Jira"
+                onClick={copyText} style={{ marginLeft: 'auto' }}>{copied ? '✓ Đã copy' : '📋 Copy'}</button>
       </h3>
       <label>Title
         <input value={issue.title} onChange={(e) => set('title', e.target.value)} />
