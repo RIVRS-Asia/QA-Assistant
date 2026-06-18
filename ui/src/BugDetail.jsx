@@ -63,6 +63,38 @@ export default function BugDetail() {
     load()
   }
 
+  const copyImage = async (f) => {
+    try {
+      const blob = await (await fetch(`${api.fileUrl(sessionId, f)}?v=${ver[f] || 0}`)).blob()
+      // ponytail: clipboard only accepts png; convert via canvas if the source isn't already png
+      const png = blob.type === 'image/png' ? blob : await new Promise((res) => {
+        const img = new Image(); img.crossOrigin = 'anonymous'
+        img.onload = () => {
+          const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight
+          c.getContext('2d').drawImage(img, 0, 0); c.toBlob(res, 'image/png')
+        }
+        img.src = URL.createObjectURL(blob)
+      })
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })])
+    } catch (e) { setError(e.message) }
+  }
+
+  const [copied, setCopied] = useState(false)
+  const copyText = async () => {
+    const lines = [
+      `Bug Display: ${issue.title || ''}`,
+      'Step to reproduce:',
+      ...(issue.repro_steps || []).map((s, i) => `${i + 1}. ${s}`),
+      'Actual Result:',
+      issue.actual_result || '',
+      'Expect Result:',
+      issue.expected_result || '',
+    ]
+    await navigator.clipboard.writeText(lines.join('\n'))
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+
   const removeImage = async (filename) => {
     if (!window.confirm('Gỡ ảnh này khỏi bug? Ảnh sẽ bị xóa và không khôi phục được.')) return
     setBusy(true)
@@ -104,6 +136,8 @@ export default function BugDetail() {
                  src={`${api.fileUrl(sessionId, f)}?v=${ver[f] || 0}`} alt={f} crossOrigin="anonymous" />
             <a className="img-dl" href={`${api.fileUrl(sessionId, f)}?v=${ver[f] || 0}`}
                download={f} title="Tải ảnh về" aria-label="Download">⬇</a>
+            <button className="img-copy" title="Copy ảnh vào clipboard"
+                    onClick={() => copyImage(f)} aria-label="Copy image">📋</button>
             {draft.status !== 'pushed' && (
               <button className="img-edit" title="Vẽ chú thích lên ảnh" disabled={busy}
                       onClick={() => annotate(f)} aria-label="Annotate">✏️</button>
@@ -142,7 +176,11 @@ export default function BugDetail() {
       </details>
 
       {/* Text extracted by LLM from transcript = issue (editable) */}
-      <h3 style={{ fontSize: 14, margin: '14px 0 4px' }}>Issue (LLM-generated from transcript)</h3>
+      <h3 style={{ fontSize: 14, margin: '14px 0 4px' }}>
+        Issue (LLM-generated from transcript)
+        <button type="button" className="link" title="Copy nội dung (không gồm ảnh) để dán vào Jira"
+                onClick={copyText} style={{ marginLeft: 8 }}>{copied ? '✓ Đã copy' : '📋 Copy'}</button>
+      </h3>
       <label>Title
         <input value={issue.title} onChange={(e) => set('title', e.target.value)} />
       </label>
