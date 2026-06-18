@@ -77,6 +77,10 @@ if (-not (Test-Path $obsDir)) {
     if (Get-Command winget -ErrorAction SilentlyContinue) {
         Info 'Installing OBS Studio 32.1.2 via winget...'
         winget install -e --id OBSProject.OBSStudio --version 32.1.2 --accept-source-agreements --accept-package-agreements
+        # winget is a native exe - $ErrorActionPreference doesn't catch its exit code, so check manually
+        if ($LASTEXITCODE -ne 0) {
+            throw "winget failed to install OBS (exit $LASTEXITCODE). If it said 'files in use', close OBS/installer or reboot, then run setup.bat again."
+        }
         # the copy steps below create %APPDATA%\obs-studio themselves, so no need to launch OBS first
         New-Item -ItemType Directory -Force -Path $obsDir | Out-Null
     } else {
