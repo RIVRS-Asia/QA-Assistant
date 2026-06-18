@@ -38,7 +38,7 @@ def capture_part(session_dir: Path, bug_id: int, part_idx: int, marker: dict) ->
     screenshots = []
     try:
         if marker_type == "capture":
-            screenshots = [media.extract_frame(clip_path, session_dir / f"{stem}.jpg")]
+            screenshots = [media.extract_frame(clip_path, session_dir / f"{stem}.jpg", config.RECORD_POST_SECONDS)]
         else:  # record
             video_clip = media.save_video_clip(clip_path, session_dir / f"{stem}.mp4", window)
     except Exception as e:

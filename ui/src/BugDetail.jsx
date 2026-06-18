@@ -4,7 +4,7 @@ import * as markerjs2 from 'markerjs2'
 import Lightbox from 'yet-another-react-lightbox'
 import Zoom from 'yet-another-react-lightbox/plugins/zoom'
 import 'yet-another-react-lightbox/styles.css'
-import { api } from './api'
+import { api, fmtSession } from './api'
 
 export default function BugDetail() {
   const { sessionId, bugId: bugIdParam } = useParams()
@@ -82,7 +82,7 @@ export default function BugDetail() {
               : <span className="status status-done" style={{ marginLeft: 8 }}>✓ {draft.jira_key}</span>)
           : <span className="status status-recorded" style={{ marginLeft: 8 }}>draft</span>}
       </h2>
-      <p className="muted">Session {sessionId}</p>
+      <p className="muted">Session {fmtSession(sessionId)}</p>
 
       {/* Video clip (record) or image (capture) */}
       {draft.video_clip && (
@@ -146,12 +146,22 @@ export default function BugDetail() {
       <label>Title
         <input value={issue.title} onChange={(e) => set('title', e.target.value)} />
       </label>
-      {issue.repro_steps?.length > 0 && (
-        <details open>
-          <summary>Steps to reproduce</summary>
-          <ol>{issue.repro_steps.map((s, i) => <li key={i}>{s}</li>)}</ol>
-        </details>
-      )}
+      <details open>
+        <summary>Steps to reproduce</summary>
+        <ol className="repro-steps">
+          {(issue.repro_steps || []).map((s, i) => (
+            <li key={i}>
+              <input value={s} onChange={(e) => {
+                const next = [...issue.repro_steps]; next[i] = e.target.value; set('repro_steps', next)
+              }} />
+              <button type="button" className="link" title="Xóa bước này"
+                      onClick={() => set('repro_steps', issue.repro_steps.filter((_, j) => j !== i))}>✕</button>
+            </li>
+          ))}
+        </ol>
+        <button type="button" className="link"
+                onClick={() => set('repro_steps', [...(issue.repro_steps || []), ''])}>+ Thêm bước</button>
+      </details>
       <label>Actual Result
         <textarea rows={3} value={issue.actual_result || ''} onChange={(e) => set('actual_result', e.target.value)} />
       </label>
@@ -164,7 +174,7 @@ export default function BugDetail() {
         </select>
       </label>
       {issue.labels?.length > 0 && (
-        <p className="muted">🏷 {issue.labels.join(', ')}</p>
+        <p className="muted">Label: {issue.labels.join(', ')}</p>
       )}
       {issue.transcript_summary_vi && <p className="muted">🗣 {issue.transcript_summary_vi}</p>}
 

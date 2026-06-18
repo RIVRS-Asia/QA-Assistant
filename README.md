@@ -102,7 +102,7 @@ Open http://localhost:5173
 
 ## Technical Notes
 
-- Each hotkey press calls OBS `SaveReplayBuffer` via obs-websocket. **Record** waits `RECORD_POST_SECONDS` (20s) before saving so the clip includes footage AFTER the press, then trims to the last `PRE+POST` seconds (20s before + 20s after). **Capture** saves immediately, extracts 1 frame. ⚠️ OBS Max Replay Time must be ≥ PRE+POST (40s).
+- Each hotkey press calls OBS `SaveReplayBuffer` via obs-websocket. **Record** waits `RECORD_POST_SECONDS` (20s) before saving so the clip includes footage AFTER the press, then trims to the last `PRE+POST` seconds (20s before + 20s after). **Capture** also waits `RECORD_POST_SECONDS` before saving (so audio = 20s before + 20s after the press), then extracts the frame at the press moment (`POST` seconds before clip end). ⚠️ OBS Max Replay Time must be ≥ PRE+POST (40s).
 - Bugs are processed **immediately after each mark** in a separate thread (non-blocking) → transcript + issue appear progressively, no need to click "Process session".
 - Transcription supports 3 ASR engines: **Gemini Flash** (multimodal, best at regional accents + game terms), **Groq Whisper large-v3** (fast, cheap), **OpenAI Whisper** (reliable baseline). Each engine runs if its API key is set; all enabled engines run in parallel. See the "Transcript" section in the UI to compare results.
 - **Issue writer** uses the first available LLM key in order: Gemini → OpenAI GPT-4o → Groq llama-3.3-70b. It cross-references all available transcripts to self-correct ASR errors.

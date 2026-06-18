@@ -73,14 +73,19 @@ Warn 'Bundled config was made with OBS 32.1.2 - use the same version to avoid co
 $obsDir = Join-Path $env:APPDATA 'obs-studio'
 if (-not (Test-Path $obsDir)) {
     Warn "OBS does not appear to be installed (no config folder at $obsDir)."
-    Write-Host ''
-    Write-Host '    OBS Studio is required for screen recording. Please install OBS 32.1.2:' -ForegroundColor Yellow
-    Write-Host '    https://cdn-fastly.obsproject.com/downloads/OBS-Studio-32.1.2-Windows-x64-Installer.exe' -ForegroundColor Cyan
-    Write-Host '    After installing, open OBS once (so it creates its config folder), close it, then run setup.bat again.' -ForegroundColor Yellow
-    Write-Host ''
-    $obsDir = Read-Host '    Already installed? Enter your OBS config folder path, or press Enter to exit'
-    if (-not $obsDir) { return }
-    if (-not (Test-Path $obsDir)) { throw "OBS folder not found: $obsDir" }
+    # version pinned to 32.1.2 so it matches the bundled profile/scene (winget 'latest' could drift)
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+        Info 'Installing OBS Studio 32.1.2 via winget...'
+        winget install -e --id OBSProject.OBSStudio --version 32.1.2 --accept-source-agreements --accept-package-agreements
+        # the copy steps below create %APPDATA%\obs-studio themselves, so no need to launch OBS first
+        New-Item -ItemType Directory -Force -Path $obsDir | Out-Null
+    } else {
+        Write-Host '    winget unavailable. Install OBS 32.1.2 manually:' -ForegroundColor Yellow
+        Write-Host '    https://cdn-fastly.obsproject.com/downloads/OBS-Studio-32.1.2-Windows-x64-Installer.exe' -ForegroundColor Cyan
+        $obsDir = Read-Host '    Then enter your OBS config folder path, or press Enter to exit'
+        if (-not $obsDir) { return }
+        if (-not (Test-Path $obsDir)) { throw "OBS folder not found: $obsDir" }
+    }
 }
 if (Get-Process obs64, obs -ErrorAction SilentlyContinue) {
     throw 'OBS is running. Close OBS completely, then run setup.bat again (OBS overwrites its config on exit).'
@@ -102,10 +107,24 @@ if (Test-Path $wsFile) { Copy-Item $wsFile "$wsFile.bak" -Force }
 Copy-Item (Join-Path $src 'obs-websocket-config.json') $wsFile -Force
 Ok 'OBS profile "QA-Assistant", scene collection, and WebSocket config installed.'
 
+# ---------- 6. OBS install path (used by run.bat to auto-launch OBS) ----------
+Info 'Resolving OBS install path...'
+$obsInstall = Join-Path $env:ProgramFiles 'obs-studio'
+if (-not (Test-Path (Join-Path $obsInstall 'bin\64bit\obs64.exe'))) {
+    Warn "OBS not found at $obsInstall."
+    $obsInstall = Read-Host '    Enter your OBS install folder (the one containing bin\64bit\obs64.exe)'
+    if (-not (Test-Path (Join-Path $obsInstall 'bin\64bit\obs64.exe'))) {
+        throw "obs64.exe not found under $obsInstall\bin\64bit"
+    }
+}
+Set-Content -Path (Join-Path $root 'obs-path.txt') -Value $obsInstall -Encoding UTF8 -NoNewline
+Ok "OBS install path saved: $obsInstall"
+
 Write-Host ''
-Info 'Setup complete. Next steps:'
-Write-Host '  1. Open OBS once. Top menu: Profile -> QA-Assistant, Scene Collection -> QA-Assistant.'
-Write-Host '  2. With Roblox open, double-click the "Window Capture" source and pick the Roblox window.'
-Write-Host '     (Use windowed/borderless mode. Do NOT use Game Capture - Byfron blocks it.)'
-Write-Host '  3. Close OBS, then run run.bat to start the app (it will ask for admin - needed for hotkeys).'
-Write-Host '  4. Browser opens at http://localhost:8000'
+Info 'Setup complete. Next steps - run run.bat (asks for admin - needed for hotkeys). It will:'
+Write-Host '  1. Open OBS with the QA-Assistant profile + scene (replay buffer NOT started automatically).'
+Write-Host '  2. Start the QA Assistant window.'
+Write-Host '  3. Open the browser at http://localhost:8000'
+Write-Host ''
+Write-Host '  One-time only: with Roblox open, in OBS double-click the "Window Capture" source and pick'
+Write-Host '  the Roblox window. (Use windowed/borderless mode. Do NOT use Game Capture - Byfron blocks it.)'

@@ -264,8 +264,7 @@ def _capture_part(session_dir: Path, group: dict, bug_id: int, part_idx: int,
                   marker_type: str, is_append: bool):
     """Thread for one press: [wait POST if record] -> save clip -> process -> store as a part.
     Beeps on success / error so the tester knows the data actually landed."""
-    if marker_type == "record":
-        time.sleep(config.RECORD_POST_SECONDS)
+    time.sleep(config.RECORD_POST_SECONDS)  # wait so the clip includes POST seconds after the press (record + capture)
     try:
         clip_path = obs.save_replay_buffer()
     except Exception as e:
