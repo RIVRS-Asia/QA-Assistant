@@ -59,11 +59,12 @@ def save_video_clip(clip_path: str, out_path: Path, seconds: float) -> str:
     return out_path.name
 
 
-def extract_frame(clip_path: str, out_path: Path) -> str:
-    """Extract 1 frame near the end of the clip (the hotkey press moment) as a screenshot."""
+def extract_frame(clip_path: str, out_path: Path, seconds_from_end: float = 1) -> str:
+    """Extract 1 frame at `seconds_from_end` before the clip end = the press moment.
+    Capture now waits POST seconds before saving, so the press is POST seconds before the end."""
     _run([
         FFMPEG, "-y",
-        "-sseof", "-1", "-i", clip_path,
+        "-sseof", f"-{seconds_from_end}", "-i", clip_path,
         "-frames:v", "1", "-q:v", "3",
         str(out_path),
     ])
