@@ -1,3 +1,11 @@
+// Session id "20260618_143022" (giờ máy ghi, VN time) -> "18/06/2026 14:30:22"
+export function fmtSession(id) {
+  const m = /^(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})$/.exec(id || '')
+  if (!m) return id
+  const [, y, mo, d, h, mi, s] = m
+  return `${d}/${mo}/${y} ${h}:${mi}:${s}`
+}
+
 // Call FastAPI backend (via vite proxy /api)
 async function request(path, options = {}) {
   const res = await fetch(`/api${path}`, {

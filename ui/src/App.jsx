@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Routes, Route, useNavigate } from 'react-router-dom'
-import { api } from './api'
+import { api, fmtSession } from './api'
 import { subscribe } from './ws'
 import SessionDetail from './SessionDetail'
 import BugDetail from './BugDetail'
@@ -85,7 +85,7 @@ function Home({ sessions, bugs }) {
           <div key={`${b.session_id}-${b.id}`} className="session-row"
                onClick={() => navigate(`/sessions/${b.session_id}/bugs/${b.id}`)}>
             <span>{b.type === 'capture' ? '📷' : '📹'} {b.title || '(no title yet)'}{b.image_count > 1 ? ` (${b.image_count} ảnh)` : ''}</span>
-            <span className="muted">{b.session_id}</span>
+            <span className="muted">{fmtSession(b.session_id)}</span>
             {b.status === 'pushed'
               ? <span className="status status-done">✓ {b.jira_key}</span>
               : <span className="status status-recorded">draft</span>}
@@ -99,7 +99,7 @@ function Home({ sessions, bugs }) {
         {sessions.length === 0 && <p className="muted">No sessions yet.</p>}
         {sessions.map((s) => (
           <div key={s.id} className="session-row" onClick={() => navigate(`/sessions/${s.id}`)}>
-            <b>{s.id}</b>
+            <b>{fmtSession(s.id)}</b>
             <span>{s.draft_count} bug</span>
             <span className={`status status-${s.status}`}>{s.status}</span>
           </div>

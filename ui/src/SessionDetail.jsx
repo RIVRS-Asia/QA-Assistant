@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { api } from './api'
+import { api, fmtSession } from './api'
 import { subscribe } from './ws'
 
 export default function SessionDetail() {
@@ -30,7 +30,7 @@ export default function SessionDetail() {
   return (
     <div className="panel">
       <button className="link" onClick={() => navigate('/')}>← Back</button>
-      <h2>Session {id} <span className={`status status-${meta.status}`}>{meta.status}</span></h2>
+      <h2>Session {fmtSession(id)} <span className={`status status-${meta.status}`}>{meta.status}</span></h2>
       <p className="muted">{drafts.length} bugs processed / {meta.markers?.length || 0} marker(s)</p>
       {meta.error && <div className="error">{meta.error}</div>}
       {failed_markers.length > 0 && (

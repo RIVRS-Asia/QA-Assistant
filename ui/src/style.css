@@ -1,12 +1,13 @@
 * { box-sizing: border-box; }
-html { zoom: 1.25; }  /* ponytail: phóng toàn trang 125% */
+/* ponytail: zoom 125% chỉ trên .app — KHÔNG để trên html, vì markerjs2 render popup
+   vào document.body (ngoài .app); zoom toàn trang làm popup tràn viewport, crop mất nút lưu. */
 body {
   margin: 0;
   font-family: system-ui, -apple-system, sans-serif;
   background: #0f1115;
   color: #e6e6e6;
 }
-.app { max-width: 860px; margin: 0 auto; padding: 24px 16px; }
+.app { max-width: 860px; margin: 0 auto; padding: 24px 16px; zoom: 1.25; }
 h1 { font-size: 22px; }
 h2 { font-size: 17px; margin: 4px 0 12px; }
 .badge { font-size: 11px; background: #2dd4a7; color: #08251c; padding: 2px 8px; border-radius: 10px; vertical-align: middle; }
@@ -52,7 +53,7 @@ kbd { background: #262b35; border: 1px solid #353c49; border-radius: 4px; paddin
 
 .draft { border: 1px solid #262b35; border-radius: 10px; padding: 14px; margin-top: 14px; }
 .screenshots { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
-.screenshots img { height: 135px; border-radius: 6px; border: 1px solid #262b35; display: block; }
+.screenshots img { height: 169px; border-radius: 6px; border: 1px solid #262b35; display: block; }
 .shot { position: relative; display: inline-block; }
 
 /* Delete-screenshot icon overlay — high-contrast so it never gets lost on a screenshot */
@@ -105,3 +106,7 @@ input, textarea, select {
   background: #11141a; color: #e6e6e6; border: 1px solid #262b35;
   border-radius: 6px; padding: 8px; font-size: 14px; font-family: inherit;
 }
+
+.repro-steps li { margin-bottom: 6px; }
+.repro-steps li input { display: inline-block; width: calc(100% - 28px); margin-top: 0; }
+.repro-steps li button { width: auto; padding: 0 6px; margin-left: 4px; }
