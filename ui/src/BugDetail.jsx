@@ -81,16 +81,31 @@ export default function BugDetail() {
   }
 
   const copyText = async () => {
-    const lines = [
+    const esc = (s) => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    const steps = issue.repro_steps || []
+    const plain = [
       `Bug Display: ${issue.title || ''}`,
       'Step to reproduce:',
-      ...(issue.repro_steps || []).map((s, i) => `${i + 1}. ${s}`),
+      ...steps.map((s, i) => `${i + 1}. ${s}`),
       'Actual Result:',
       issue.actual_result || '',
       'Expect Result:',
       issue.expected_result || '',
-    ]
-    await navigator.clipboard.writeText(lines.join('\n'))
+    ].join('\n')
+    const html =
+      `<p><strong>Bug Display:</strong> ${esc(issue.title)}</p>` +
+      `<p><strong>Step to reproduce:</strong></p>` +
+      `<ol>${steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ol>` +
+      `<p><strong>Actual Result:</strong><br>${esc(issue.actual_result)}</p>` +
+      `<p><strong>Expect Result:</strong><br>${esc(issue.expected_result)}</p>`
+    try {
+      await navigator.clipboard.write([new ClipboardItem({
+        'text/html': new Blob([html], { type: 'text/html' }),
+        'text/plain': new Blob([plain], { type: 'text/plain' }),
+      })])
+    } catch {
+      await navigator.clipboard.writeText(plain)  // fallback nếu trình duyệt không hỗ trợ ClipboardItem
+    }
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
   }
