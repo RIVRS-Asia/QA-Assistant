@@ -28,9 +28,11 @@ if (Test-Path $envFile) {
     Ok '.env removed.'
 }
 
-# ---------- 3. __pycache__ ----------
+# ---------- 3. __pycache__ + obs-path.txt (both created by setup, not in a fresh clone) ----------
 Get-ChildItem -Path (Join-Path $root 'backend') -Filter '__pycache__' -Recurse -Directory -ErrorAction SilentlyContinue |
     ForEach-Object { Remove-Item $_.FullName -Recurse -Force }
+$obsPathTxt = Join-Path $root 'obs-path.txt'
+if (Test-Path $obsPathTxt) { Remove-Item $obsPathTxt -Force; Ok 'obs-path.txt removed.' }
 
 # ---------- 4. OBS config (profile + scene, restore the WebSocket config) ----------
 $obsDir = Join-Path $env:APPDATA 'obs-studio'
@@ -75,9 +77,17 @@ if (Get-Command winget -ErrorAction SilentlyContinue) {
     if (Ask 'Uninstall Python via winget? (skip if you had Python before, or use it for other things)') {
         winget uninstall -e --id Python.Python.3.12
     }
+    if (Ask 'Uninstall OBS Studio + ALL its config via winget? (skip if you use OBS for other things)') {
+        if (Get-Process obs64, obs -ErrorAction SilentlyContinue) {
+            Warn 'OBS is running - close it first, then re-run uninstall.bat.'
+        } else {
+            winget uninstall -e --id OBSProject.OBSStudio
+            # winget leaves %APPDATA%\obs-studio behind - remove it for a clean machine
+            if (Test-Path $obsDir) { Remove-Item $obsDir -Recurse -Force; Ok 'OBS config folder removed.' }
+        }
+    }
 }
 
 Write-Host ''
 Info 'Uninstall complete.'
-Write-Host '  OBS itself was NOT removed (you installed it). Uninstall it from Windows Settings if you no longer need it.'
 Write-Host '  To use QA Assistant again later, just run setup.bat.'
