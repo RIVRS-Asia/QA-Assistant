@@ -8,8 +8,14 @@ if (Get-Process obs64, obs -ErrorAction SilentlyContinue) {
     return
 }
 
-# Find obs64.exe: default install dir, then the registry uninstall key as fallback.
-$exe = "$env:ProgramFiles\obs-studio\bin\64bit\obs64.exe"
+# Find obs64.exe: the path saved by setup.ps1 (obs-path.txt), then the default
+# install dir, then the registry uninstall key as fallback.
+$pathFile = Join-Path $PSScriptRoot 'obs-path.txt'
+if (Test-Path $pathFile) {
+    $exe = Join-Path ((Get-Content $pathFile -Raw).Trim()) 'bin\64bit\obs64.exe'
+} else {
+    $exe = "$env:ProgramFiles\obs-studio\bin\64bit\obs64.exe"
+}
 if (-not (Test-Path $exe)) {
     $key = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\OBS Studio' -ErrorAction SilentlyContinue
     if ($key.InstallLocation) { $exe = Join-Path $key.InstallLocation 'bin\64bit\obs64.exe' }

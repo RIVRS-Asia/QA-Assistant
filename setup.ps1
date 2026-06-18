@@ -102,11 +102,24 @@ if (Test-Path $wsFile) { Copy-Item $wsFile "$wsFile.bak" -Force }
 Copy-Item (Join-Path $src 'obs-websocket-config.json') $wsFile -Force
 Ok 'OBS profile "QA-Assistant", scene collection, and WebSocket config installed.'
 
+# ---------- 6. OBS install path (used by run.bat to auto-launch OBS) ----------
+Info 'Resolving OBS install path...'
+$obsInstall = Join-Path $env:ProgramFiles 'obs-studio'
+if (-not (Test-Path (Join-Path $obsInstall 'bin\64bit\obs64.exe'))) {
+    Warn "OBS not found at $obsInstall."
+    $obsInstall = Read-Host '    Enter your OBS install folder (the one containing bin\64bit\obs64.exe)'
+    if (-not (Test-Path (Join-Path $obsInstall 'bin\64bit\obs64.exe'))) {
+        throw "obs64.exe not found under $obsInstall\bin\64bit"
+    }
+}
+Set-Content -Path (Join-Path $root 'obs-path.txt') -Value $obsInstall -Encoding UTF8 -NoNewline
+Ok "OBS install path saved: $obsInstall"
+
 Write-Host ''
-Info 'Setup complete. Next steps:'
-Write-Host '  1. One-time only: with Roblox open, open OBS, double-click the "Window Capture"'
-Write-Host '     source and pick the Roblox window. Then close OBS.'
-Write-Host '     (Use windowed/borderless mode. Do NOT use Game Capture - Byfron blocks it.)'
-Write-Host '  2. Run run.bat (asks for admin - needed for hotkeys). It auto-launches OBS with the'
-Write-Host '     QA-Assistant profile + scene and the replay buffer already running.'
-Write-Host '  3. Browser opens at http://localhost:8000'
+Info 'Setup complete. Next steps - run run.bat (asks for admin - needed for hotkeys). It will:'
+Write-Host '  1. Open OBS with the QA-Assistant profile + scene (replay buffer NOT started automatically).'
+Write-Host '  2. Start the QA Assistant window.'
+Write-Host '  3. Open the browser at http://localhost:8000'
+Write-Host ''
+Write-Host '  One-time only: with Roblox open, in OBS double-click the "Window Capture" source and pick'
+Write-Host '  the Roblox window. (Use windowed/borderless mode. Do NOT use Game Capture - Byfron blocks it.)'

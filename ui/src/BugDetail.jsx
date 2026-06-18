@@ -164,7 +164,7 @@ export default function BugDetail() {
         </select>
       </label>
       {issue.labels?.length > 0 && (
-        <p className="muted">🏷 {issue.labels.join(', ')}</p>
+        <p className="muted">Label: {issue.labels.join(', ')}</p>
       )}
       {issue.transcript_summary_vi && <p className="muted">🗣 {issue.transcript_summary_vi}</p>}
 
