@@ -39,9 +39,9 @@ The bundled OBS profile is a copy of a known-working setup. Two values are hardw
 
 - **Encoder = NVENC** (NVIDIA). On a non-NVIDIA GPU, OBS will warn — change
   *Settings → Output → Recording → Encoder* to x264 (or the available hardware encoder).
-- **Canvas = 3440×1440** (an ultrawide). Recording still works (Window Capture grabs the Roblox
-  window regardless), but for clean framing set *Settings → Video → Base/Output Resolution* to the
-  monitor's resolution.
+- **Canvas = 1920×1080** (Base = Output, no downscale). Recording still works (Window Capture grabs
+  the Roblox window regardless), but for clean framing set *Settings → Video → Base/Output Resolution*
+  to the monitor's resolution if it differs.
 - **Replay Buffer must be ≥ 40s** (`RECORD_PRE_SECONDS + RECORD_POST_SECONDS`). The bundled profile
   already sets 40s; only revisit if you change those values in `.env`.
 

@@ -14,6 +14,9 @@ if not exist ".venv\Scripts\python.exe" (
     exit /b
 )
 
+REM auto-launch OBS with the QA-Assistant profile/scene + replay buffer running
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0start-obs.ps1"
+
 REM open the browser shortly after the server starts
 start "" /min cmd /c "ping -n 3 127.0.0.1 >nul & start http://localhost:8000"
 

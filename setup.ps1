@@ -104,8 +104,9 @@ Ok 'OBS profile "QA-Assistant", scene collection, and WebSocket config installed
 
 Write-Host ''
 Info 'Setup complete. Next steps:'
-Write-Host '  1. Open OBS once. Top menu: Profile -> QA-Assistant, Scene Collection -> QA-Assistant.'
-Write-Host '  2. With Roblox open, double-click the "Window Capture" source and pick the Roblox window.'
+Write-Host '  1. One-time only: with Roblox open, open OBS, double-click the "Window Capture"'
+Write-Host '     source and pick the Roblox window. Then close OBS.'
 Write-Host '     (Use windowed/borderless mode. Do NOT use Game Capture - Byfron blocks it.)'
-Write-Host '  3. Close OBS, then run run.bat to start the app (it will ask for admin - needed for hotkeys).'
-Write-Host '  4. Browser opens at http://localhost:8000'
+Write-Host '  2. Run run.bat (asks for admin - needed for hotkeys). It auto-launches OBS with the'
+Write-Host '     QA-Assistant profile + scene and the replay buffer already running.'
+Write-Host '  3. Browser opens at http://localhost:8000'
