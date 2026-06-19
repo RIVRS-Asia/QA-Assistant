@@ -2,16 +2,14 @@
 
 Automated bug reporting pipeline for QA playtesting Roblox games:
 
-```
-QA plays game → encounters bug: describes verbally (in Vietnamese) + presses hotkey
-   Ctrl+Shift+F9  = VIDEO clip (20s before + 20s after)  |  Alt+B = SCREENSHOT (1 frame)  |  Alt+A = append screenshot
-→ OBS Replay Buffer: each press saves 1 clip — does NOT record the entire session
-→ Each bug is processed automatically in the background: audio + (mp4 clip / image frame)
-  → transcribe (Gemini / Groq Whisper / OpenAI Whisper — any combination, run in parallel)
-→ LLM writes draft Jira issue in English (Gemini → OpenAI GPT → Groq llama, first available)
-  → appears progressively in the Bugs table
-→ UI review/edit → push to Jira (mock mode by default)
-```
+1. QA plays the game → hits a bug → **describes it verbally** (in Vietnamese) and **presses a hotkey**:
+   - `Ctrl+Shift+F9` = VIDEO clip (20s before + 20s after)
+   - `Alt+B` = SCREENSHOT (1 frame)
+   - `Alt+A` = append screenshot
+2. **OBS Replay Buffer**: each press saves 1 clip — it does *not* record the whole session.
+3. Each bug is processed **automatically in the background**: audio + (mp4 clip / image frame) → transcribe (Gemini / Groq Whisper / OpenAI Whisper — any combination, in parallel).
+4. An **LLM writes a draft Jira issue in English** (Gemini → OpenAI GPT → Groq llama, first available) → it appears progressively in the Bugs table.
+5. **UI review/edit** → push to Jira (mock mode by default).
 
 ## Structure
 
@@ -29,63 +27,37 @@ ui/                 # React (Vite) - session control + review drafts
 sessions/           # data per session (auto-created, gitignored)
 ```
 
-## Setup (one-time)
+## Setup
 
-> Delivering to another machine with minimal steps? See [`docs/DELIVERY.md`](docs/DELIVERY.md)
-> (`setup.bat` + `run.bat`, UI served by the backend, OBS config bundled — no Node needed).
+`setup.bat` does almost everything: installs Python and OBS (via winget if missing), creates
+`backend\.venv` + installs deps, writes `.env` (prompts for API keys), and installs the bundled OBS
+profile/scene/WebSocket config. Pick your path:
 
-### 1. OBS
+### A. Just use the app
 
-- Install [OBS Studio](https://obsproject.com/) + enable **Tools > WebSocket Server Settings > Enable** (note the password).
-- Scene: add **Window Capture** pointing to the Roblox window (⚠️ do NOT use Game Capture — Byfron anti-cheat blocks it, black screen). Run Roblox in windowed/borderless mode.
-- **Configure video/recording + enable Replay Buffer**: see [`docs/OBS_SETUP.md`](docs/OBS_SETUP.md). Summary: Output resolution = Base (no downscale), Lanczos filter, 30 FPS, Quality **HQ**, format **mp4**, **enable Replay Buffer (Max Replay Time ~40s)** — app only saves a clip when hotkey is pressed.
-- Separate mic track: **Settings > Output > Output Mode: Advanced > Recording > Audio Track** — if only mic is recorded on track 1, keep `MIC_AUDIO_STREAM=0` in `.env`. If track 1 = desktop, track 2 = mic, set `MIC_AUDIO_STREAM=1`.
+Only **Windows** needed — no Node, no Python preinstalled.
 
-### 2. Backend
+1. `git clone <repo>` (include `ui/dist/`), then double-click **`setup.bat`**.
+2. Open OBS once → it's already on the **QA-Assistant** profile + scene; double-click **Window Capture** and pick the Roblox window (windowed/borderless; ⚠️ not Game Capture — Byfron blocks it) → close OBS.
+3. Double-click **`run.bat`** (self-elevates for hotkeys) → opens http://localhost:8000.
 
-Requires Python 3.10+. ffmpeg (used to trim audio/video & capture frames) is bundled with the
-`imageio-ffmpeg` package in requirements — `pip install` handles it, no additional installation or PATH setup needed.
+Day-to-day: just `run.bat`. Full walkthrough + troubleshooting: [`docs/DELIVERY.md`](docs/DELIVERY.md).
 
-```bash
-cd backend
-python -m venv .venv && .venv\Scripts\activate   # Windows
-pip install -r requirements.txt
-```
+### B. Develop / contribute
 
-### 3. Configuration
+Run `setup.bat` (gives you `.venv`, `.env`, OBS config), then run the two servers with hot reload —
+this needs **Node** installed for the UI:
 
 ```bash
-copy .env.example .env
+# Terminal 1 — backend (admin required on Windows for hotkeys over a focused game)
+cd backend && .venv\Scripts\activate && uvicorn main:app --reload --port 8000
+
+# Terminal 2 — UI (Vite dev server, http://localhost:5173)
+cd ui && npm install && npm run dev
 ```
 
-Minimum required: at least one of `GEMINI_API_KEY` / `GROQ_API_KEY` / `OPENAI_API_KEY`, and `OBS_PASSWORD`.
-Leave Jira fields empty = mock mode (issues written to `sessions/<id>/pushed_issues.json`).
-
-**ASR engines** (transcription): any combination is valid — set the keys for the engines you want to use.
-**Issue writer** uses the first available key in order: Gemini → OpenAI → Groq.
-
-### 4. UI
-
-```bash
-cd ui
-npm install
-```
-
-## Running
-
-Terminal 1 (backend — requires admin privileges on Windows for hotkeys to work when game is focused):
-
-```bash
-cd backend && uvicorn main:app --port 8000
-```
-
-Terminal 2 (UI):
-
-```bash
-cd ui && npm run dev
-```
-
-Open http://localhost:5173
+- Edit `.env` to tune things: at least one of `GEMINI_API_KEY` / `GROQ_API_KEY` / `OPENAI_API_KEY` is required; empty Jira fields = mock mode (issues written to `sessions/<id>/pushed_issues.json`). ASR runs any combination of engines whose keys are set; the issue writer uses the first available in order Gemini → OpenAI → Groq.
+- Shipping UI changes to path A? Rebuild the bundle the backend serves: `cd ui && npm run build` (regenerates `ui/dist/`), then commit it.
 
 ## Usage Flow (for QA)
 
@@ -106,12 +78,3 @@ Open http://localhost:5173
 - Bugs are processed **immediately after each mark** in a separate thread (non-blocking) → transcript + issue appear progressively, no need to click "Process session".
 - Transcription supports 3 ASR engines: **Gemini Flash** (multimodal, best at regional accents + game terms), **Groq Whisper large-v3** (fast, cheap), **OpenAI Whisper** (reliable baseline). Each engine runs if its API key is set; all enabled engines run in parallel. See the "Transcript" section in the UI to compare results.
 - **Issue writer** uses the first available LLM key in order: Gemini → OpenAI GPT-4o → Groq llama-3.3-70b. It cross-references all available transcripts to self-correct ASR errors.
-
-## TODO after POC
-
-- [ ] Ingest Roblox Studio logs by timestamp
-- [x] Attach video clip + all screenshots to Jira issue (`/rest/api/3/issue/{key}/attachments`)
-- [ ] Auto-detect bug from transcript when QA forgets to press hotkey
-- [ ] Deduplicate against existing Jira issues (JQL search)
-- [x] Multiple images per bug — `APPEND_HOTKEY` (Alt+A) attaches extra screenshots to the open bug; the bug is finalized into one draft (screenshots list + concatenated transcript). UI has a gallery with per-image delete and a "merge into previous bug" button to fix mis-grouping.
-- [ ] Mark/annotate the bug location (QA used to circle the spot on the screenshot): auto via vision LLM — feed the frame + transcript to Gemini so it returns bounding-box coords and draws the circle; and/or a manual canvas overlay in `BugDetail` to circle/arrow before pushing to Jira.

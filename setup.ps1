@@ -11,24 +11,36 @@ function Warn($m)  { Write-Host "    $m" -ForegroundColor Yellow }
 
 # ---------- 1. Python ----------
 Info 'Checking Python...'
-$py = (Get-Command python -ErrorAction SilentlyContinue)
-if (-not $py) {
-    Warn 'Python not found - installing via winget...'
-    winget install -e --id Python.Python.3.12 --accept-source-agreements --accept-package-agreements
-    $py = (Get-Command python -ErrorAction SilentlyContinue)
-    if (-not $py) {
-        Warn 'Python installed but not on PATH yet. Close this window and run setup.bat again.'
-        return
-    }
+function Resolve-Python {
+    # bare 'python' first; if missing, refresh PATH from registry (winget installs don't show up
+    # in the current session) and retry; finally fall back to the default per-user install location.
+    $c = Get-Command python -ErrorAction SilentlyContinue
+    if ($c) { return $c.Source }
+    $env:Path = ([Environment]::GetEnvironmentVariable('Path','Machine') + ';' +
+                 [Environment]::GetEnvironmentVariable('Path','User'))
+    $c = Get-Command python -ErrorAction SilentlyContinue
+    if ($c) { return $c.Source }
+    $guess = Get-ChildItem "$env:LOCALAPPDATA\Programs\Python\Python3*\python.exe" -ErrorAction SilentlyContinue |
+             Select-Object -First 1
+    if ($guess) { return $guess.FullName }
+    return $null
 }
-Ok ("Python: " + (python --version))
+$pyExe = Resolve-Python
+if (-not $pyExe) {
+    Warn 'Python not found - installing via winget...'
+    winget install -e --id Python.Python.3.12 --scope user --accept-source-agreements --accept-package-agreements
+    if ($LASTEXITCODE -ne 0) { throw "winget failed to install Python (exit $LASTEXITCODE). Install Python 3.10+ manually, then run setup.bat again." }
+    $pyExe = Resolve-Python
+    if (-not $pyExe) { throw 'Python installed but could not be located. Close this window and run setup.bat again.' }
+}
+Ok ("Python: " + (& $pyExe --version))
 
 # ---------- 2. venv + backend deps ----------
 $venv = Join-Path $root 'backend\.venv'
 $venvPy = Join-Path $venv 'Scripts\python.exe'
 if (-not (Test-Path $venvPy)) {
     Info 'Creating virtual environment (backend\.venv)...'
-    python -m venv $venv
+    & $pyExe -m venv $venv
 }
 Info 'Installing backend dependencies (imageio-ffmpeg bundles ffmpeg, downloaded automatically ~70MB - needs internet)...'
 & $venvPy -m pip install --upgrade pip --quiet
