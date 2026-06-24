@@ -28,6 +28,7 @@ OBS_PASSWORD = os.getenv("OBS_PASSWORD", "")
 RECORD_HOTKEY = os.getenv("RECORD_HOTKEY", "ctrl+shift+f9")  # NEW bug with video clip
 CAPTURE_HOTKEY = os.getenv("CAPTURE_HOTKEY", "alt+b")    # NEW bug with screenshot  (B = Bug)
 APPEND_HOTKEY = os.getenv("APPEND_HOTKEY", "alt+a")      # add screenshot to OPEN bug  (A = Append)
+END_HOTKEY = os.getenv("END_HOTKEY", "alt+e")            # end OPEN bug -> process with AI  (E = End)
 MIC_AUDIO_STREAM = int(os.getenv("MIC_AUDIO_STREAM", "0"))
 
 # Record clip = PRE seconds before + POST seconds after the press. OBS Max Replay Time must be >= PRE+POST.

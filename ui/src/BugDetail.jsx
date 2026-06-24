@@ -5,6 +5,7 @@ import Lightbox from 'yet-another-react-lightbox'
 import Zoom from 'yet-another-react-lightbox/plugins/zoom'
 import 'yet-another-react-lightbox/styles.css'
 import { api, fmtSession } from './api'
+import { subscribe } from './ws'
 
 export default function BugDetail() {
   const { sessionId, bugId: bugIdParam } = useParams()
@@ -43,6 +44,14 @@ export default function BugDetail() {
   }
 
   useEffect(() => { load() }, [sessionId, bugId])
+
+  // While the AI is still processing this bug, reload on every backend change so newly appended
+  // images (Alt+A) and the finalized issue text show up live. Stops once it's a real draft — so it
+  // never clobbers the edits you're typing into a finished draft.
+  useEffect(() => {
+    if (!draft?.processing) return
+    return subscribe((msg) => { if (msg.type === 'state') load() })
+  }, [draft?.processing])
 
   if (error) return <div className="panel"><button className="link" onClick={onBack}>← Back</button><div className="error">{error}</div></div>
   if (!draft) return <p className="muted">Loading...</p>
@@ -130,6 +139,9 @@ export default function BugDetail() {
           : <span className="status status-recorded" style={{ marginLeft: 8 }}>draft</span>}
       </h2>
       <p className="muted">Session {fmtSession(sessionId)}</p>
+      {draft.processing && (
+        <p className="muted">⏳ AI is still analyzing this bug — you can view and annotate the images now; the text fields fill in automatically when it finishes.</p>
+      )}
 
       {/* Video clip (record) or image (capture) */}
       {draft.video_clip && (
@@ -233,8 +245,8 @@ export default function BugDetail() {
 
       {draft.status !== 'pushed' && (
         <div className="row">
-          <button onClick={save} disabled={busy}>💾 Save</button>
-          <button className="start" onClick={push} disabled={busy}>🚀 Push Jira</button>
+          <button onClick={save} disabled={busy || draft.processing}>💾 Save</button>
+          <button className="start" onClick={push} disabled={busy || draft.processing}>🚀 Push Jira</button>
         </div>
       )}
     </div>

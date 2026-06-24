@@ -24,6 +24,7 @@ class HotkeyListener:
             (config.RECORD_HOTKEY,  "record"),
             (config.CAPTURE_HOTKEY, "capture"),
             (config.APPEND_HOTKEY,  "append"),
+            (config.END_HOTKEY,     "end"),
         ]
         for hotkey, marker_type in bindings:
             # suppress=True: the keypress is consumed here and does NOT reach any other app.

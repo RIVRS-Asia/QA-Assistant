@@ -179,6 +179,7 @@ def _status_payload() -> dict:
         "record_hotkey": config.RECORD_HOTKEY,
         "capture_hotkey": config.CAPTURE_HOTKEY,
         "append_hotkey": config.APPEND_HOTKEY,
+        "end_hotkey": config.END_HOTKEY,
         "asr_engines": {
             "gemini": bool(config.GEMINI_API_KEY),
             "groq": bool(config.GROQ_API_KEY),
@@ -212,6 +213,7 @@ def _bugs_payload() -> list[dict]:
         if not drafts_file.exists():
             continue
         for draft in json.loads(drafts_file.read_text(encoding="utf-8")):
+            screenshots = draft.get("screenshots", [])
             bugs.append({
                 "session_id": d.name,
                 "id": draft["id"],
@@ -219,11 +221,42 @@ def _bugs_payload() -> list[dict]:
                 "title": draft["issue"].get("title", ""),
                 "priority": draft["issue"].get("priority", ""),
                 "status": draft["status"],
-                "image_count": len(draft.get("screenshots", [])),
+                "image_count": len(screenshots),
+                "thumb": screenshots[0] if screenshots else None,  # first frame for the panel thumbnail
                 "jira_key": draft.get("jira_key", ""),
                 "jira_url": draft.get("jira_url", ""),
             })
     return bugs
+
+
+def _row_from_group(session_id: str, g: dict) -> dict:
+    """A live (not-yet-finalized) bug row for the panel: shows up the instant the hotkey is
+    pressed (status 'open' = capturing) and flips to 'processing' once the bug is ended (Alt+E)."""
+    with g["lock"]:
+        shots = [s for p in sorted(g["parts"], key=lambda p: p["part"]) for s in (p.get("screenshots") or [])]
+        ready = len(g["parts"])
+    return {
+        "session_id": session_id,
+        "bug_id": g["bug_id"],
+        "type": g["type"],
+        "status": g.get("status", "open"),   # "open" (capturing) | "processing" (AI)
+        "thumb": shots[0] if shots else None,
+        "img_count": g["next_part"],          # presses so far (B + each A)
+        "ready_count": ready,                 # parts whose clip/frame has been extracted
+    }
+
+
+def _inflight_payload() -> list[dict]:
+    """In-memory bugs not yet written as drafts: the open one + any being AI-processed."""
+    sess = active_session
+    if not sess:
+        return []
+    rows = []
+    if sess.get("group"):
+        rows.append(_row_from_group(sess["id"], sess["group"]))
+    for g in list(sess.get("processing", [])):  # copy: finalizer thread may remove during iteration
+        rows.append(_row_from_group(sess["id"], g))
+    return rows
 
 
 def _build_snapshot() -> dict:
@@ -232,6 +265,7 @@ def _build_snapshot() -> dict:
         "status": _status_payload(),
         "sessions": _sessions_payload(),
         "bugs": _bugs_payload(),
+        "inflight": _inflight_payload(),
     }
 
 
@@ -251,6 +285,7 @@ def _open_group(marker_type: str) -> dict:
     group = {
         "bug_id": bug_id,
         "type": marker_type,
+        "status": "open",       # open (capturing) -> processing (AI) -> written as a draft
         "parts": [],            # filled by part threads (guarded by lock)
         "part_threads": [],     # joined on finalize
         "lock": threading.Lock(),
@@ -308,30 +343,43 @@ def _add_part(session_dir: Path, group: dict, marker_type: str, is_append: bool)
     t.start()
 
 
-def _finalize_group(session_dir: Path, group: dict, pending: list):
-    """Wait for all parts of the group to finish, then assemble + write ONE draft.
-    `pending` is the session's thread list so session/stop can wait for this finalizer."""
+def _finalize_group(session_dir: Path, group: dict, sess: dict):
+    """End a bug: mark it 'processing' (so the panel shows the AI spinner), wait for all parts,
+    run the LLM, write ONE draft, then drop it from the in-flight list (panel shows it 'ready').
+    The finalizer thread is tracked in sess['pending'] so session/stop can wait for it."""
+    group["status"] = "processing"
+    sess.setdefault("processing", []).append(group)
+    ws_manager.notify()  # flip the row to "analyzing (AI)…" immediately
+
     def run():
         for t in list(group["part_threads"]):
             t.join(timeout=config.RECORD_POST_SECONDS + 30)
         with group["lock"]:
             parts = sorted(group["parts"], key=lambda p: p["part"])
-        if not parts:
-            print(f"[bug {group['bug_id']}] no parts saved - nothing to finalize")
-            return
-        draft = process_session.finalize_bug(group["bug_id"], group["type"], parts)
-        _append_draft(session_dir, draft)
-        print(f"[bug {group['bug_id']}] finalized with {len(parts)} part(s)")
-        ws_manager.notify()
+        try:
+            if parts:
+                draft = process_session.finalize_bug(group["bug_id"], group["type"], parts)
+                _append_draft(session_dir, draft)
+                print(f"[bug {group['bug_id']}] finalized with {len(parts)} part(s)")
+            else:
+                print(f"[bug {group['bug_id']}] no parts saved - nothing to finalize")
+        finally:
+            try:
+                sess["processing"].remove(group)
+            except ValueError:
+                pass
+            ws_manager.notify()  # row moves from in-flight -> drafts (green "ready")
 
     t = threading.Thread(target=run, daemon=True)
-    pending.append(t)
+    sess["pending"].append(t)
     t.start()
 
 
 def _on_marker(marker_type: str):
     """Runs on the hotkey thread.
-    record/capture = open a new bug (closing the previous one); append = add an image to the open bug."""
+    record/capture = open a NEW bug; append = add an image to the open bug;
+    end = finish the open bug and hand it to the AI. A new-bug press also ends the previous
+    open bug (safety net) so nothing is left un-processed."""
     sess = active_session
     if sess is None:
         return
@@ -349,9 +397,19 @@ def _on_marker(marker_type: str):
         else:
             _add_part(session_dir, group, "capture", is_append=True)
             print(f"[marker] +image to bug #{group['bug_id']}")
-    else:
+    elif marker_type == "end":
+        group = sess.get("group")
+        if group is None:
+            feedback.error()  # nothing open to end
+            print("[marker] end with no open bug")
+        else:
+            feedback.tick()
+            _finalize_group(session_dir, group, sess)
+            sess["group"] = None
+            print(f"[marker] end bug #{group['bug_id']} -> AI")
+    else:  # record / capture = open a new bug (closing the previous one, if any)
         if sess.get("group") is not None:
-            _finalize_group(session_dir, sess["group"], sess["pending"])
+            _finalize_group(session_dir, sess["group"], sess)
             sess["group"] = None
         group = _open_group(marker_type)
         _add_part(session_dir, group, marker_type, is_append=False)
@@ -377,7 +435,7 @@ def start_session():
         "markers": [], "status": "recording",
     })
 
-    active_session = {"id": session_id, "next_id": 0, "pending": [], "group": None}
+    active_session = {"id": session_id, "next_id": 0, "pending": [], "group": None, "processing": []}
     while not _marker_queue.empty():  # drop any presses left over from a previous session
         try:
             _marker_queue.get_nowait()
@@ -403,7 +461,7 @@ def stop_session():
 
     # finalize the still-open bug before tearing down
     if sess.get("group") is not None:
-        _finalize_group(session_dir, sess["group"], sess["pending"])
+        _finalize_group(session_dir, sess["group"], sess)
         sess["group"] = None
 
     def finalize():
@@ -435,15 +493,52 @@ def list_bugs():
     return _bugs_payload()
 
 
+def _find_inflight_group(session_id: str, bug_id: int):
+    """The open or AI-processing group for this bug, if it isn't a written draft yet."""
+    sess = active_session
+    if not sess or sess["id"] != session_id:
+        return None
+    groups = ([sess["group"]] if sess.get("group") else []) + list(sess.get("processing", []))
+    return next((g for g in groups if g["bug_id"] == bug_id), None)
+
+
+def _partial_bug(group: dict) -> dict:
+    """Draft-shaped view of a not-yet-finalized bug so the detail page can show the images
+    captured so far (and annotate them) while the AI is still running. The `issue` is an empty
+    placeholder; `processing=True` tells the UI to keep refreshing until the real draft lands."""
+    with group["lock"]:
+        parts = sorted(group["parts"], key=lambda p: p["part"])
+    screenshots, audios, video_clip = [], [], None
+    for p in parts:
+        screenshots.extend(p.get("screenshots") or [])
+        if p.get("audio"):
+            audios.append(p["audio"])
+        if p.get("video_clip") and video_clip is None:
+            video_clip = p["video_clip"]
+    return {
+        "id": group["bug_id"], "type": group["type"],
+        "video_clip": video_clip, "screenshots": screenshots, "audios": audios,
+        "transcripts": process_session._merge_transcripts(parts),
+        "issue": {"title": "", "repro_steps": [], "actual_result": "",
+                  "expected_result": "", "priority": "Medium"},
+        "status": group.get("status", "open"),
+        "processing": True,
+    }
+
+
 @app.get("/api/sessions/{session_id}/bugs/{bug_id}")
 def get_bug(session_id: str, bug_id: int):
     """Single bug for the detail page. Includes the list of mic-audio filenames; falls back to the
-    old single-file name (bug{id}.wav) for drafts created before multi-image support."""
+    old single-file name (bug{id}.wav) for drafts created before multi-image support.
+    If the bug is still capturing / being AI-processed, returns a partial view from memory."""
     session_dir = _session_dir(session_id)
     drafts_file = session_dir / "drafts.json"
     drafts = json.loads(drafts_file.read_text(encoding="utf-8")) if drafts_file.exists() else []
     draft = next((d for d in drafts if d["id"] == bug_id), None)
     if draft is None:
+        group = _find_inflight_group(session_id, bug_id)
+        if group is not None:
+            return _partial_bug(group)
         raise HTTPException(404, "Bug not found")
     audios = draft.get("audios")
     if not audios:

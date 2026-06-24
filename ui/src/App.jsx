@@ -1,11 +1,19 @@
 import { useEffect, useState } from 'react'
-import { Routes, Route, useNavigate } from 'react-router-dom'
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 import { api, fmtSession } from './api'
 import { subscribe } from './ws'
 import SessionDetail from './SessionDetail'
 import BugDetail from './BugDetail'
+import Panel from './Panel'
 
 export default function App() {
+  // /panel = the compact always-on-top window (pywebview); everything else = the full review UI.
+  const loc = useLocation()
+  if (loc.pathname === '/panel') return <Panel />
+  return <FullApp />
+}
+
+function FullApp() {
   const [status, setStatus] = useState(null)
   const [sessions, setSessions] = useState([])
   const [bugs, setBugs] = useState([])
@@ -48,7 +56,7 @@ export default function App() {
         {status?.recording ? (
           <div className="recording">
             <p>🔴 Recording — session <b>{status.active_session}</b></p>
-            <p>New bug → describe it verbally then press <kbd>{status.record_hotkey}</kbd> (video) or <kbd>{status.capture_hotkey}</kbd> (screenshot). Same bug, extra screenshot → <kbd>{status.append_hotkey}</kbd>. Marked: <b>{status.marker_count}</b> bug(s)</p>
+            <p>New bug → describe it verbally then press <kbd>{status.record_hotkey}</kbd> (video) or <kbd>{status.capture_hotkey}</kbd> (screenshot). Same bug, extra screenshot → <kbd>{status.append_hotkey}</kbd>. End bug → process with AI → <kbd>{status.end_hotkey}</kbd>. Marked: <b>{status.marker_count}</b> bug(s)</p>
             <p className="muted">🔊 Listen for the beep: two rising notes = new bug saved, one note = image added, low buzz = save failed (try again).</p>
             <button className="stop" onClick={() => act(api.stopSession)}>⏹ End session</button>
           </div>
