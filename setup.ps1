@@ -9,6 +9,19 @@ function Info($m)  { Write-Host "==> $m" -ForegroundColor Cyan }
 function Ok($m)    { Write-Host "    $m" -ForegroundColor Green }
 function Warn($m)  { Write-Host "    $m" -ForegroundColor Yellow }
 
+# ---------- 0. Git ----------
+Info 'Checking Git...'
+if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+    $ans = Read-Host '    Git not found. Install via winget (CLI only)? [Y/N]'
+    if ($ans -notmatch '^[Yy]') { Write-Host '    Skipping Git install. Exiting.' -ForegroundColor Yellow; exit }
+    winget install -e --id Git.Git --scope machine --accept-source-agreements --accept-package-agreements
+    if ($LASTEXITCODE -ne 0) { throw "winget failed to install Git (exit $LASTEXITCODE)." }
+    $env:Path = ([Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User'))
+    Ok 'Git installed.'
+} else {
+    Ok ("Git: " + (git --version))
+}
+
 # ---------- 1. Python ----------
 Info 'Checking Python...'
 function Resolve-Python {

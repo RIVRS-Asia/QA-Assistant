@@ -7,6 +7,26 @@ if %errorlevel% neq 0 (
     exit /b
 )
 
+setlocal enabledelayedexpansion
+where git >nul 2>&1
+if %errorlevel% equ 0 (
+    for /f %%b in ('git -C "%~dp0." rev-parse --abbrev-ref HEAD 2^>nul') do set _BRANCH=%%b
+    if "!_BRANCH!"=="main" (
+        git -C "%~dp0." diff --quiet 2>nul && git -C "%~dp0." diff --cached --quiet 2>nul
+        if !errorlevel! equ 0 (
+            echo [git] main - clean, pulling latest...
+            git -C "%~dp0." pull origin main
+        ) else (
+            echo [git] main - has local changes, running as-is.
+        )
+    ) else (
+        echo [git] branch: !_BRANCH! - running as-is.
+    )
+) else (
+    echo [git] git not found - running as-is. Run setup.bat to install git.
+)
+endlocal
+
 cd /d "%~dp0backend"
 if not exist ".venv\Scripts\python.exe" (
     echo Virtual environment not found. Run setup.bat first.
