@@ -33,6 +33,8 @@ export const api = {
     request(`/sessions/${id}/drafts/${draftId}/push`, { method: 'POST' }),
   deleteScreenshot: (id, draftId, filename) =>
     request(`/sessions/${id}/drafts/${draftId}/screenshots/${filename}`, { method: 'DELETE' }),
+  swapScreenshot: (id, draftId, filename, to) =>
+    request(`/sessions/${id}/drafts/${draftId}/screenshots/${filename}/swap`, { method: 'PUT', body: JSON.stringify({ to }) }),
   mergeDraft: (id, draftId, intoId) =>
     request(`/sessions/${id}/drafts/${draftId}/merge`, { method: 'POST', body: JSON.stringify({ into_id: intoId }) }),
   fileUrl: (id, filename) => `/api/sessions/${id}/files/${filename}`,

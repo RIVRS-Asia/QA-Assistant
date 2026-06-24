@@ -14,7 +14,7 @@ part/bug is never dropped - bugs are always written as drafts.
 from pathlib import Path
 
 import config
-from pipeline import media, transcribe, issue_writer
+from pipeline import media, transcribe, issue_writer, grounding
 
 
 def capture_part(session_dir: Path, bug_id: int, part_idx: int, marker: dict) -> dict:
@@ -67,9 +67,37 @@ def _merge_transcripts(parts: list[dict]) -> dict:
     return {engine: "\n".join(texts) for engine, texts in merged.items()}
 
 
-def finalize_bug(bug_id: int, group_type: str, parts: list[dict]) -> dict:
+def _first_transcript(transcripts: dict) -> str:
+    """Best available raw transcript text (kept in VI - has spatial cues like 'góc trên bên phải'),
+    skipping engine error markers ('[gemini error: ...]')."""
+    for engine in ("gemini", "openai", "groq"):
+        text = (transcripts.get(engine) or "").strip()
+        if text and not text.startswith("["):
+            return text
+    return ""
+
+
+def _auto_annotate(bug_id: int, screenshots: list[str], transcripts: dict, session_dir: Path) -> list[dict]:
+    """For each screenshot, ask Gemini where the bug is and burn a red box onto a *copy*. Best-effort:
+    returns [{src, marked, box}] suggestions for the UI to show; never touches the original frame."""
+    description = _first_transcript(transcripts)
+    marks = []
+    for shot in screenshots:
+        try:
+            box = grounding.locate_bug(session_dir / shot, description)
+            if not box:
+                continue
+            marked = media.draw_box(session_dir / shot, box, session_dir / f"{Path(shot).stem}_marked.png")
+            marks.append({"src": shot, "marked": marked, "box": box})
+        except Exception as e:
+            print(f"[bug {bug_id}] auto-annotate {shot} failed: {e}")
+    return marks
+
+
+def finalize_bug(bug_id: int, group_type: str, parts: list[dict], session_dir: Path | None = None) -> dict:
     """Assemble all parts of a bug into ONE draft: collect screenshots/audios, concatenate
-    transcripts, and call the LLM once. parts must be ordered by part index."""
+    transcripts, call the LLM once, and (when session_dir is given) auto-suggest a bug-region box
+    per screenshot. parts must be ordered by part index."""
     screenshots: list[str] = []
     audios: list[str] = []
     video_clip = None
@@ -82,6 +110,7 @@ def finalize_bug(bug_id: int, group_type: str, parts: list[dict]) -> dict:
 
     transcripts = _merge_transcripts(parts)
     issue = issue_writer.write_issue(transcripts)
+    auto_marks = _auto_annotate(bug_id, screenshots, transcripts, session_dir) if session_dir else []
 
     return {
         "id": bug_id,
@@ -91,5 +120,6 @@ def finalize_bug(bug_id: int, group_type: str, parts: list[dict]) -> dict:
         "audios": audios,
         "transcripts": transcripts,
         "issue": issue,
+        "auto_marks": auto_marks,  # [{src, marked, box}] AI bug-region suggestions (QA confirms via UI)
         "status": "draft",  # draft -> pushed (workflow states)
     }

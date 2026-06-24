@@ -41,12 +41,6 @@ EMPTY_ISSUE = {
 
 
 def _parse_json(text: str) -> dict:
-    """LLM sometimes wraps JSON in ```...``` - strip it out before parsing."""
-    text = text.strip()
-    if text.startswith("```"):
-        text = text.split("```")[1]
-        if text.startswith("json"):
-            text = text[4:]
     return json.loads(text.strip())
 
 
@@ -88,9 +82,14 @@ def _shorten(text: str, limit: int = 80) -> str:
 
 def _call_gemini(prompt: str) -> str:
     from google import genai
+    from google.genai import types
 
     client = genai.Client(api_key=config.GEMINI_API_KEY)
-    response = client.models.generate_content(model=config.GEMINI_MODEL, contents=prompt)
+    response = client.models.generate_content(
+        model=config.GEMINI_MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(response_mime_type="application/json"),
+    )
     return response.text or ""
 
 
@@ -102,6 +101,7 @@ def _call_groq(prompt: str) -> str:
             "model": "llama-3.3-70b-versatile",
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.2,
+            "response_format": {"type": "json_object"},
         },
         timeout=120,
     )
@@ -117,6 +117,7 @@ def _call_openai(prompt: str) -> str:
             "model": config.OPENAI_MODEL,
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.2,
+            "response_format": {"type": "json_object"},
         },
         timeout=120,
     )

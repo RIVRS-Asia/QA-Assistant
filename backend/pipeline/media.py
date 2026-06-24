@@ -59,6 +59,17 @@ def save_video_clip(clip_path: str, out_path: Path, seconds: float) -> str:
     return out_path.name
 
 
+def draw_box(image_path, box: list[int], out_path: Path) -> str:
+    """Burn a red rectangle (the auto-suggested bug region) onto a COPY of the frame - never the
+    original. `box` is [ymin, xmin, ymax, xmax] normalized 0-1000 (Gemini format); drawn with
+    iw/ih expressions so no image-size lookup is needed. Returns the output filename."""
+    ymin, xmin, ymax, xmax = (n / 1000 for n in box)
+    vf = (f"drawbox=x=iw*{xmin:.4f}:y=ih*{ymin:.4f}:"
+          f"w=iw*{xmax - xmin:.4f}:h=ih*{ymax - ymin:.4f}:color=red@1.0:t=5")
+    _run([FFMPEG, "-y", "-i", str(image_path), "-vf", vf, str(out_path)])
+    return out_path.name
+
+
 def extract_frame(clip_path: str, out_path: Path, seconds_from_end: float = 1) -> str:
     """Extract 1 frame at `seconds_from_end` before the clip end = the press moment.
     Capture now waits POST seconds before saving, so the press is POST seconds before the end."""

@@ -260,12 +260,18 @@ def _inflight_payload() -> list[dict]:
 
 
 def _build_snapshot() -> dict:
+    bugs = _bugs_payload()
+    inflight = _inflight_payload()
+    # Once a bug's draft is written it is DONE; drop any lingering in-memory "analyzing" row for it
+    # so the panel never shows the same bug twice (draft + inflight) during the finalize race.
+    done = {(b["session_id"], b["id"]) for b in bugs}
+    inflight = [r for r in inflight if (r["session_id"], r["bug_id"]) not in done]
     return {
         "type": "state",
         "status": _status_payload(),
         "sessions": _sessions_payload(),
-        "bugs": _bugs_payload(),
-        "inflight": _inflight_payload(),
+        "bugs": bugs,
+        "inflight": inflight,
     }
 
 
@@ -349,6 +355,8 @@ def _finalize_group(session_dir: Path, group: dict, sess: dict):
     The finalizer thread is tracked in sess['pending'] so session/stop can wait for it."""
     group["status"] = "processing"
     sess.setdefault("processing", []).append(group)
+    if sess.get("group") is group:  # ponytail: clear before notify so inflight doesn't double-count
+        sess["group"] = None
     ws_manager.notify()  # flip the row to "analyzing (AI)…" immediately
 
     def run():
@@ -358,7 +366,7 @@ def _finalize_group(session_dir: Path, group: dict, sess: dict):
             parts = sorted(group["parts"], key=lambda p: p["part"])
         try:
             if parts:
-                draft = process_session.finalize_bug(group["bug_id"], group["type"], parts)
+                draft = process_session.finalize_bug(group["bug_id"], group["type"], parts, session_dir)
                 _append_draft(session_dir, draft)
                 print(f"[bug {group['bug_id']}] finalized with {len(parts)} part(s)")
             else:
@@ -405,12 +413,10 @@ def _on_marker(marker_type: str):
         else:
             feedback.tick()
             _finalize_group(session_dir, group, sess)
-            sess["group"] = None
             print(f"[marker] end bug #{group['bug_id']} -> AI")
     else:  # record / capture = open a new bug (closing the previous one, if any)
         if sess.get("group") is not None:
             _finalize_group(session_dir, sess["group"], sess)
-            sess["group"] = None
         group = _open_group(marker_type)
         _add_part(session_dir, group, marker_type, is_append=False)
         print(f"[marker] bug #{group['bug_id']} ({marker_type})")
@@ -587,6 +593,36 @@ def delete_screenshot(session_id: str, draft_id: int, filename: str):
         draft["screenshots"] = [s for s in draft.get("screenshots", []) if s != name]
         drafts_file.write_text(json.dumps(drafts, ensure_ascii=False, indent=2), encoding="utf-8")
     (session_dir / name).unlink(missing_ok=True)
+    ws_manager.notify()
+    return draft
+
+
+@app.put("/api/sessions/{session_id}/drafts/{draft_id}/screenshots/{filename}/swap")
+def swap_screenshot(session_id: str, draft_id: int, filename: str, body: dict):
+    """Non-destructive apply/rollback of an AI auto-mark: swap a screenshot entry between its
+    original frame and its boxed copy. Both files stay on disk so it's fully reversible and no
+    pixels are lost. `to` must be the matching src<->marked partner from this bug's auto_marks."""
+    name = Path(filename).name        # block path traversal
+    to = Path(body.get("to", "")).name
+    session_dir = _session_dir(session_id)
+    with _drafts_lock:
+        drafts_file = session_dir / "drafts.json"
+        drafts = json.loads(drafts_file.read_text(encoding="utf-8"))
+        draft = next((d for d in drafts if d["id"] == draft_id), None)
+        if draft is None:
+            raise HTTPException(404, "Bug not found")
+        if draft.get("status") == "pushed":
+            raise HTTPException(400, "Bug already pushed to Jira")
+        pairs = {(m["src"], m["marked"]) for m in draft.get("auto_marks", [])}
+        if (name, to) not in pairs and (to, name) not in pairs:
+            raise HTTPException(400, "Not a valid auto-mark swap for this bug")
+        if not (session_dir / to).exists():
+            raise HTTPException(404, "Target image not found")
+        shots = draft.get("screenshots", [])
+        if name not in shots:
+            raise HTTPException(404, "Screenshot not in this bug")
+        draft["screenshots"] = [to if s == name else s for s in shots]
+        drafts_file.write_text(json.dumps(drafts, ensure_ascii=False, indent=2), encoding="utf-8")
     ws_manager.notify()
     return draft
 

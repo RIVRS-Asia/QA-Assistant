@@ -35,6 +35,15 @@ export default function BugDetail() {
     ma.show()
   }
 
+  // Apply / roll back the AI auto-mark by swapping which file this slot points to (original <-> boxed
+  // copy). Non-destructive: both files stay on disk, so it's fully reversible - no overwrite, no data loss.
+  const swapShot = async (from, to) => {
+    setBusy(true)
+    try { await api.swapScreenshot(sessionId, bugId, from, to); await load() }
+    catch (e) { setError(e.message) }
+    setBusy(false)
+  }
+
   const load = async () => {
     try {
       const d = await api.getBug(sessionId, bugId)
@@ -57,6 +66,11 @@ export default function BugDetail() {
   if (!draft) return <p className="muted">Loading...</p>
 
   const set = (k, v) => setIssue({ ...issue, [k]: v })
+
+  // AI bug-region suggestions, looked up by whichever file the slot currently shows: the original
+  // frame (markBySrc -> can apply) or the boxed copy (markByMarked -> can roll back).
+  const markBySrc = Object.fromEntries((draft.auto_marks || []).map((m) => [m.src, m]))
+  const markByMarked = Object.fromEntries((draft.auto_marks || []).map((m) => [m.marked, m]))
 
   const save = async () => {
     setBusy(true)
@@ -180,6 +194,21 @@ export default function BugDetail() {
                   <path d="M10 11v6M14 11v6" />
                 </svg>
               </button>
+            )}
+            {draft.status !== 'pushed' && markByMarked[f] && (
+              <div className="auto-mark" style={{ marginTop: 4 }}>
+                <span className="muted" style={{ marginRight: 10 }}>✨ Đang dùng khung AI</span>
+                <button type="button" className="link" disabled={busy}
+                        title="Quay lại ảnh gốc (không có khung)"
+                        onClick={() => swapShot(f, markByMarked[f].src)}>↩ Ảnh gốc</button>
+              </div>
+            )}
+            {draft.status !== 'pushed' && markBySrc[f] && (
+              <div className="auto-mark" style={{ marginTop: 4 }}>
+                <button type="button" className="link" disabled={busy}
+                        title="Dùng ảnh AI đã khoanh vùng lỗi (có thể hoàn tác)"
+                        onClick={() => swapShot(f, markBySrc[f].marked)}>✨ Dùng gợi ý AI</button>
+              </div>
             )}
           </div>
         ))}
