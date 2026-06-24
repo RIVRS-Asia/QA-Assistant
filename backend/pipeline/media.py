@@ -76,7 +76,7 @@ def extract_frame(clip_path: str, out_path: Path, seconds_from_end: float = 1) -
     _run([
         FFMPEG, "-y",
         "-sseof", f"-{seconds_from_end}", "-i", clip_path,
-        "-frames:v", "1", "-q:v", "3",
+        "-frames:v", "1", "-q:v", "1",
         str(out_path),
     ])
     return out_path.name

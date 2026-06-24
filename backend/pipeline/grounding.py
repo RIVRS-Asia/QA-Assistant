@@ -38,7 +38,7 @@ def locate_bug(image_path, description: str) -> list[int] | None:
             ],
             config=types.GenerateContentConfig(response_mime_type="application/json"),
         )
-        return _parse_box(resp.text or "")
+        return _pad_box(_parse_box(resp.text or ""))
     except Exception as e:
         print(f"[grounding] error, no auto-mark: {e}")
         return None
@@ -54,3 +54,11 @@ def _parse_box(text: str) -> list[int] | None:
     if all(0 <= n <= 1000 for n in box) and box[0] < box[2] and box[1] < box[3]:
         return box
     return None
+
+
+def _pad_box(box: list[int] | None, pad: int = 20) -> list[int] | None:
+    # ponytail: pad=20 ~2% margin on 0-1000 scale, covers Gemini's typical localization drift
+    if not box:
+        return None
+    ymin, xmin, ymax, xmax = box
+    return [max(0, ymin - pad), max(0, xmin - pad), min(1000, ymax + pad), min(1000, xmax + pad)]
