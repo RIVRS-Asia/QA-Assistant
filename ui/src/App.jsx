@@ -76,6 +76,7 @@ function FullApp() {
         <Route path="/" element={<Home sessions={sessions} bugs={bugs} />} />
         <Route path="/sessions/:id" element={<SessionDetail />} />
         <Route path="/sessions/:sessionId/bugs/:bugId" element={<BugDetail />} />
+        <Route path="/sessions/:sessionId/bugs/:bugId/v/:ver" element={<BugDetail />} />
       </Routes>
     </div>
   )
@@ -92,7 +93,7 @@ function Home({ sessions, bugs }) {
         {bugs.map((b) => (
           <div key={`${b.session_id}-${b.id}`} className="session-row"
                onClick={() => navigate(`/sessions/${b.session_id}/bugs/${b.id}`)}>
-            <span>{b.type === 'capture' ? '📷' : '📹'} {b.title || '(no title yet)'}{b.image_count > 1 ? ` (${b.image_count} ảnh)` : ''}</span>
+            <span>{b.type === 'capture' ? '📷' : '📹'} {b.title || '(no title yet)'}{b.image_count > 1 ? ` (${b.image_count} images)` : ''}</span>
             <span className="muted">{fmtSession(b.session_id)}</span>
             {b.status === 'pushed'
               ? <span className="status status-done">✓ {b.jira_key}</span>

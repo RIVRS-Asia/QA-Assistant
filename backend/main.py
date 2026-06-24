@@ -109,6 +109,116 @@ def _append_draft(session_dir: Path, draft: dict):
         f.write_text(json.dumps(drafts, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+# ---------- versioned drafts ----------
+# A bug holds N result "versions" (each = one AI pass: transcripts + issue + auto_marks + screenshots).
+# Media (audios / video_clip / base_screenshots) is shared across versions. default_ver is the version
+# shown in the bugs list and on the detail page's default route. Legacy flat drafts are upgraded on read.
+
+def _normalize_draft(draft: dict) -> dict:
+    """Upgrade a legacy flat draft (single result) to the versioned shape. Idempotent."""
+    if "versions" in draft:
+        return draft
+    auto_marks = draft.get("auto_marks", [])
+    marked_to_src = {m["marked"]: m["src"] for m in auto_marks}
+    shots = draft.get("screenshots", [])
+    base = [marked_to_src.get(s, s) for s in shots]  # undo applied boxes to recover original frames
+    v0 = {
+        "ver": 0,
+        "transcripts": draft.get("transcripts", {}),
+        "transcript_edited": False,
+        "issue": draft.get("issue", {}),
+        "auto_marks": auto_marks,
+        "screenshots": shots,
+        "status": draft.get("status", "draft"),
+        "jira_key": draft.get("jira_key", ""),
+        "jira_url": draft.get("jira_url", ""),
+        "created_at": None,
+    }
+    return {
+        "id": draft["id"],
+        "type": draft.get("type", "record"),
+        "video_clip": draft.get("video_clip"),
+        "audios": draft.get("audios", []),
+        "base_screenshots": base,
+        "default_ver": 0,
+        "versions": [v0],
+    }
+
+
+def _default_version(draft: dict) -> dict:
+    versions = draft["versions"]
+    dv = draft.get("default_ver", 0)
+    return versions[dv if 0 <= dv < len(versions) else 0]
+
+
+def _get_version(draft: dict, ver: int | None) -> dict:
+    """The requested version, or the default when ver is None. 404 on a bad index."""
+    versions = draft["versions"]
+    idx = draft.get("default_ver", 0) if ver is None else ver
+    if not (0 <= idx < len(versions)):
+        raise HTTPException(404, f"Version {idx} not found")
+    return versions[idx]
+
+
+def _file_referenced(draft: dict, name: str) -> bool:
+    """True if any version (or the shared base) still points at this file - guards unlink."""
+    if name in draft.get("base_screenshots", []):
+        return True
+    for v in draft["versions"]:
+        if name in v.get("screenshots", []):
+            return True
+        if any(name in (m.get("src"), m.get("marked")) for m in v.get("auto_marks", [])):
+            return True
+    return False
+
+
+def _version_view(session_dir: Path, draft: dict, ver: int | None) -> dict:
+    """Flatten bug + one version into the shape the detail page reads, plus version metadata."""
+    v = _get_version(draft, ver)
+    audios = [a for a in (draft.get("audios") or []) if (session_dir / a).exists()]
+    return {
+        "id": draft["id"],
+        "type": draft.get("type", "record"),
+        "video_clip": draft.get("video_clip"),
+        "audios": audios,
+        "screenshots": v.get("screenshots", []),
+        "transcripts": v.get("transcripts", {}),
+        "transcript_edited": v.get("transcript_edited", False),
+        "issue": v.get("issue", {}),
+        "auto_marks": v.get("auto_marks", []),
+        "status": v.get("status", "draft"),
+        "jira_key": v.get("jira_key", ""),
+        "jira_url": v.get("jira_url", ""),
+        "ver": v.get("ver", 0),
+        "default_ver": draft.get("default_ver", 0),
+        "version_count": len(draft["versions"]),
+        "versions_meta": [
+            {"ver": x.get("ver", i), "status": x.get("status", "draft"),
+             "transcript_edited": x.get("transcript_edited", False),
+             "created_at": x.get("created_at")}
+            for i, x in enumerate(draft["versions"])
+        ],
+    }
+
+
+def _write_drafts(drafts_file: Path, drafts: list):
+    drafts_file.write_text(json.dumps(drafts, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _load_draft(session_dir: Path, draft_id: int):
+    """Load drafts.json, find the bug by id, normalize it to versioned shape (persisting the upgrade
+    back into the list). Returns (drafts_file, drafts, normalized_draft). Caller holds _drafts_lock
+    and writes the list back. Raises 404 if not found."""
+    drafts_file = session_dir / "drafts.json"
+    drafts = json.loads(drafts_file.read_text(encoding="utf-8")) if drafts_file.exists() else []
+    idx = next((i for i, d in enumerate(drafts) if d["id"] == draft_id), None)
+    if idx is None:
+        raise HTTPException(404, "Bug not found")
+    draft = _normalize_draft(drafts[idx])
+    drafts[idx] = draft
+    return drafts_file, drafts, draft
+
+
 # ---------- websocket: push live state to the UI instead of polling ----------
 
 class WSManager:
@@ -213,18 +323,21 @@ def _bugs_payload() -> list[dict]:
         if not drafts_file.exists():
             continue
         for draft in json.loads(drafts_file.read_text(encoding="utf-8")):
-            screenshots = draft.get("screenshots", [])
+            draft = _normalize_draft(draft)
+            v = _default_version(draft)  # the default version drives the list row
+            screenshots = v.get("screenshots", [])
             bugs.append({
                 "session_id": d.name,
                 "id": draft["id"],
                 "type": draft.get("type", "record"),
-                "title": draft["issue"].get("title", ""),
-                "priority": draft["issue"].get("priority", ""),
-                "status": draft["status"],
+                "title": v.get("issue", {}).get("title", ""),
+                "priority": v.get("issue", {}).get("priority", ""),
+                "status": v.get("status", "draft"),
                 "image_count": len(screenshots),
                 "thumb": screenshots[0] if screenshots else None,  # first frame for the panel thumbnail
-                "jira_key": draft.get("jira_key", ""),
-                "jira_url": draft.get("jira_url", ""),
+                "jira_key": v.get("jira_key", ""),
+                "jira_url": v.get("jira_url", ""),
+                "version_count": len(draft["versions"]),
             })
     return bugs
 
@@ -430,7 +543,7 @@ def start_session():
         raise HTTPException(400, "Another session is already running")
 
     try:
-        obs.start_replay_buffer()  # raise nếu OBS chưa mở / chưa bật replay buffer
+        obs.start_replay_buffer()  # raises if OBS isn't open or replay buffer isn't enabled
     except Exception as e:
         raise HTTPException(400, str(e))
     session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -529,13 +642,18 @@ def _partial_bug(group: dict) -> dict:
                   "expected_result": "", "priority": "Medium"},
         "status": group.get("status", "open"),
         "processing": True,
+        # inflight bugs are single-version until finalized; keep the detail page's switcher happy
+        "ver": 0, "default_ver": 0, "version_count": 1,
+        "transcript_edited": False, "auto_marks": [],
+        "versions_meta": [{"ver": 0, "status": group.get("status", "open"),
+                           "transcript_edited": False, "created_at": None}],
     }
 
 
 @app.get("/api/sessions/{session_id}/bugs/{bug_id}")
-def get_bug(session_id: str, bug_id: int):
-    """Single bug for the detail page. Includes the list of mic-audio filenames; falls back to the
-    old single-file name (bug{id}.wav) for drafts created before multi-image support.
+def get_bug(session_id: str, bug_id: int, ver: int | None = None):
+    """Single bug for the detail page, flattened to one version (`ver`, default when omitted).
+    Falls back to the old single-file audio name (bug{id}.wav) for pre-multi-image drafts.
     If the bug is still capturing / being AI-processed, returns a partial view from memory."""
     session_dir = _session_dir(session_id)
     drafts_file = session_dir / "drafts.json"
@@ -546,11 +664,12 @@ def get_bug(session_id: str, bug_id: int):
         if group is not None:
             return _partial_bug(group)
         raise HTTPException(404, "Bug not found")
-    audios = draft.get("audios")
-    if not audios:
+    draft = _normalize_draft(draft)
+    if not draft.get("audios"):
         legacy = f"bug{bug_id}.wav"
-        audios = [legacy] if (session_dir / legacy).exists() else []
-    return {**draft, "audios": [a for a in audios if (session_dir / a).exists()]}
+        if (session_dir / legacy).exists():
+            draft["audios"] = [legacy]
+    return _version_view(session_dir, draft, ver)
 
 
 @app.get("/api/sessions/{session_id}")
@@ -558,80 +677,78 @@ def get_session(session_id: str):
     session_dir = _session_dir(session_id)
     meta = _load_meta(session_dir)
     drafts_file = session_dir / "drafts.json"
-    drafts = json.loads(drafts_file.read_text(encoding="utf-8")) if drafts_file.exists() else []
+    raw = json.loads(drafts_file.read_text(encoding="utf-8")) if drafts_file.exists() else []
+    # flatten each bug to its default version so the session list shows title/status/thumbnails
+    drafts = [_version_view(session_dir, _normalize_draft(d), None) for d in raw]
     failed = [m for m in meta.get("markers", []) if m.get("failed")]
     return {"meta": meta, "drafts": drafts, "failed_markers": failed}
 
 
 @app.put("/api/sessions/{session_id}/drafts/{draft_id}")
-def update_draft(session_id: str, draft_id: int, issue: dict):
-    """UI edits title/repro_steps/actual+expected_result/priority before pushing (looked up by id, not index)."""
+def update_draft(session_id: str, draft_id: int, issue: dict, ver: int | None = None):
+    """UI edits title/repro_steps/actual+expected_result/priority on version `ver` (default when omitted)."""
     session_dir = _session_dir(session_id)
     with _drafts_lock:
-        drafts_file = session_dir / "drafts.json"
-        drafts = json.loads(drafts_file.read_text(encoding="utf-8"))
-        draft = next((d for d in drafts if d["id"] == draft_id), None)
-        if draft is None:
-            raise HTTPException(404, "Bug not found")
-        draft["issue"].update(issue)
-        drafts_file.write_text(json.dumps(drafts, ensure_ascii=False, indent=2), encoding="utf-8")
+        drafts_file, drafts, draft = _load_draft(session_dir, draft_id)
+        v = _get_version(draft, ver)
+        v.setdefault("issue", {}).update(issue)
+        _write_drafts(drafts_file, drafts)
     ws_manager.notify()
-    return draft
+    return _version_view(session_dir, draft, ver)
 
 
 @app.delete("/api/sessions/{session_id}/drafts/{draft_id}/screenshots/{filename}")
-def delete_screenshot(session_id: str, draft_id: int, filename: str):
-    """Remove one screenshot from a bug (safety net for a mis-attached image). Deletes the file too."""
+def delete_screenshot(session_id: str, draft_id: int, filename: str, ver: int | None = None):
+    """Remove one screenshot from a bug (safety net for a mis-attached image). Drops it from version
+    `ver` + the shared base so future reprocesses won't re-add it; unlinks the file only when no
+    version anywhere still references it (so older/pushed versions keep their pixels)."""
     session_dir = _session_dir(session_id)
     name = Path(filename).name  # block path traversal
     with _drafts_lock:
-        drafts_file = session_dir / "drafts.json"
-        drafts = json.loads(drafts_file.read_text(encoding="utf-8"))
-        draft = next((d for d in drafts if d["id"] == draft_id), None)
-        if draft is None:
-            raise HTTPException(404, "Bug not found")
-        draft["screenshots"] = [s for s in draft.get("screenshots", []) if s != name]
-        drafts_file.write_text(json.dumps(drafts, ensure_ascii=False, indent=2), encoding="utf-8")
-    (session_dir / name).unlink(missing_ok=True)
+        drafts_file, drafts, draft = _load_draft(session_dir, draft_id)
+        v = _get_version(draft, ver)
+        v["screenshots"] = [s for s in v.get("screenshots", []) if s != name]
+        draft["base_screenshots"] = [s for s in draft.get("base_screenshots", []) if s != name]
+        orphan = not _file_referenced(draft, name)
+        _write_drafts(drafts_file, drafts)
+    if orphan:
+        (session_dir / name).unlink(missing_ok=True)
     ws_manager.notify()
-    return draft
+    return _version_view(session_dir, draft, ver)
 
 
 @app.put("/api/sessions/{session_id}/drafts/{draft_id}/screenshots/{filename}/swap")
-def swap_screenshot(session_id: str, draft_id: int, filename: str, body: dict):
-    """Non-destructive apply/rollback of an AI auto-mark: swap a screenshot entry between its
-    original frame and its boxed copy. Both files stay on disk so it's fully reversible and no
-    pixels are lost. `to` must be the matching src<->marked partner from this bug's auto_marks."""
+def swap_screenshot(session_id: str, draft_id: int, filename: str, body: dict, ver: int | None = None):
+    """Non-destructive apply/rollback of an AI auto-mark on version `ver`: swap a screenshot entry
+    between its original frame and its boxed copy. Both files stay on disk so it's fully reversible.
+    `to` must be the matching src<->marked partner from this version's auto_marks."""
     name = Path(filename).name        # block path traversal
     to = Path(body.get("to", "")).name
     session_dir = _session_dir(session_id)
     with _drafts_lock:
-        drafts_file = session_dir / "drafts.json"
-        drafts = json.loads(drafts_file.read_text(encoding="utf-8"))
-        draft = next((d for d in drafts if d["id"] == draft_id), None)
-        if draft is None:
-            raise HTTPException(404, "Bug not found")
-        if draft.get("status") == "pushed":
+        drafts_file, drafts, draft = _load_draft(session_dir, draft_id)
+        v = _get_version(draft, ver)
+        if v.get("status") == "pushed":
             raise HTTPException(400, "Bug already pushed to Jira")
-        pairs = {(m["src"], m["marked"]) for m in draft.get("auto_marks", [])}
+        pairs = {(m["src"], m["marked"]) for m in v.get("auto_marks", [])}
         if (name, to) not in pairs and (to, name) not in pairs:
             raise HTTPException(400, "Not a valid auto-mark swap for this bug")
         if not (session_dir / to).exists():
             raise HTTPException(404, "Target image not found")
-        shots = draft.get("screenshots", [])
+        shots = v.get("screenshots", [])
         if name not in shots:
             raise HTTPException(404, "Screenshot not in this bug")
-        draft["screenshots"] = [to if s == name else s for s in shots]
-        drafts_file.write_text(json.dumps(drafts, ensure_ascii=False, indent=2), encoding="utf-8")
+        v["screenshots"] = [to if s == name else s for s in shots]
+        _write_drafts(drafts_file, drafts)
     ws_manager.notify()
-    return draft
+    return _version_view(session_dir, draft, ver)
 
 
 @app.post("/api/sessions/{session_id}/drafts/{draft_id}/merge")
 def merge_draft(session_id: str, draft_id: int, body: dict):
-    """Merge bug `draft_id` INTO bug body['into_id']: move screenshots/audios over, concatenate
-    transcripts, then delete the source draft. Lets the tester fix bugs that were split by mistake.
-    The target's edited issue text is kept as-is (only media + transcripts are merged in)."""
+    """Merge bug `draft_id` INTO bug body['into_id']: move media (base_screenshots/audios/video) over
+    and fold src's default-version screenshots + transcripts into dst's default version, then delete
+    the source. Lets the tester fix bugs that were split by mistake."""
     into_id = body.get("into_id")
     if into_id is None:
         raise HTTPException(400, "into_id is required")
@@ -641,43 +758,100 @@ def merge_draft(session_id: str, draft_id: int, body: dict):
     with _drafts_lock:
         drafts_file = session_dir / "drafts.json"
         drafts = json.loads(drafts_file.read_text(encoding="utf-8"))
-        src = next((d for d in drafts if d["id"] == draft_id), None)
-        dst = next((d for d in drafts if d["id"] == into_id), None)
-        if src is None or dst is None:
+        si = next((i for i, d in enumerate(drafts) if d["id"] == draft_id), None)
+        di = next((i for i, d in enumerate(drafts) if d["id"] == into_id), None)
+        if si is None or di is None:
             raise HTTPException(404, "Bug not found")
-        if dst["status"] == "pushed":
+        src = drafts[si] = _normalize_draft(drafts[si])
+        dst = drafts[di] = _normalize_draft(drafts[di])
+        dv = _default_version(dst)
+        sv = _default_version(src)
+        if dv.get("status") == "pushed":
             raise HTTPException(400, "Target bug already pushed to Jira")
 
-        dst.setdefault("screenshots", []).extend(src.get("screenshots", []))
+        dst.setdefault("base_screenshots", []).extend(src.get("base_screenshots", []))
         dst.setdefault("audios", []).extend(src.get("audios", []))
         if not dst.get("video_clip") and src.get("video_clip"):
             dst["video_clip"] = src["video_clip"]
-        for engine, text in (src.get("transcripts") or {}).items():
+        dv.setdefault("screenshots", []).extend(sv.get("screenshots", []))
+        for engine, text in (sv.get("transcripts") or {}).items():
             if text:
-                existing = (dst.setdefault("transcripts", {}).get(engine) or "")
-                dst["transcripts"][engine] = (existing + "\n" + text).strip()
+                existing = (dv.setdefault("transcripts", {}).get(engine) or "")
+                dv["transcripts"][engine] = (existing + "\n" + text).strip()
 
         drafts = [d for d in drafts if d["id"] != draft_id]
-        drafts_file.write_text(json.dumps(drafts, ensure_ascii=False, indent=2), encoding="utf-8")
+        _write_drafts(drafts_file, drafts)
     ws_manager.notify()
-    return dst
+    return _version_view(session_dir, dst, None)
+
+
+@app.post("/api/sessions/{session_id}/drafts/{draft_id}/reprocess")
+def reprocess_draft(session_id: str, draft_id: int, body: dict):
+    """Re-run the AI on this bug's existing media (no re-record), creating a NEW result version.
+    body.transcripts (optional) = the edited QA description to use; when given and different from the
+    baseline version's transcript, the new version is flagged transcript_edited. body.base_ver
+    (optional) picks which version's transcript to start from (default = the bug's default version).
+    The heavy LLM+grounding work runs OUTSIDE the lock so it never blocks other bug writes.
+    ponytail: synchronous request (returns when the version is ready) — fine for local single-user POC."""
+    session_dir = _session_dir(session_id)
+    transcripts = body.get("transcripts")
+    base_ver = body.get("base_ver")
+    # 1) snapshot base media + baseline transcript under the lock, then release
+    with _drafts_lock:
+        drafts_file, drafts, draft = _load_draft(session_dir, draft_id)
+        _write_drafts(drafts_file, drafts)  # persist any legacy -> versioned upgrade
+        base_screenshots = list(draft.get("base_screenshots", []))
+        base_version = _get_version(draft, base_ver)
+        baseline = base_version.get("transcripts", {})
+        prev_marks = base_version.get("auto_marks", [])
+        next_ver = len(draft["versions"])
+    use_transcripts = transcripts if transcripts is not None else baseline
+    edited = transcripts is not None and transcripts != baseline
+    # 2) heavy AI work (LLM + grounding) with NO lock held. Only re-ground when the transcript was
+    # edited - otherwise carry over the existing box so reprocess never randomly moves a good mark.
+    version = process_session.reprocess_bug(draft_id, base_screenshots, use_transcripts, session_dir,
+                                            next_ver, prev_marks=prev_marks, reground=edited)
+    version["transcript_edited"] = edited
+    # 3) re-acquire, re-read (another reprocess may have landed), append
+    with _drafts_lock:
+        drafts_file, drafts, draft = _load_draft(session_dir, draft_id)
+        version["ver"] = len(draft["versions"])
+        draft["versions"].append(version)
+        _write_drafts(drafts_file, drafts)
+        view = _version_view(session_dir, draft, version["ver"])
+    ws_manager.notify()
+    return view
+
+
+@app.put("/api/sessions/{session_id}/drafts/{draft_id}/default")
+def set_default_version(session_id: str, draft_id: int, body: dict):
+    """Mark version body['ver'] as the bug's default (shown in the bugs list + default detail route)."""
+    ver = body.get("ver")
+    if ver is None:
+        raise HTTPException(400, "ver is required")
+    session_dir = _session_dir(session_id)
+    with _drafts_lock:
+        drafts_file, drafts, draft = _load_draft(session_dir, draft_id)
+        if not (0 <= ver < len(draft["versions"])):
+            raise HTTPException(404, f"Version {ver} not found")
+        draft["default_ver"] = ver
+        _write_drafts(drafts_file, drafts)
+    ws_manager.notify()
+    return _version_view(session_dir, draft, ver)
 
 
 @app.post("/api/sessions/{session_id}/drafts/{draft_id}/push")
-def push_draft(session_id: str, draft_id: int):
+def push_draft(session_id: str, draft_id: int, ver: int | None = None):
     session_dir = _session_dir(session_id)
     with _drafts_lock:
-        drafts_file = session_dir / "drafts.json"
-        drafts = json.loads(drafts_file.read_text(encoding="utf-8"))
-        draft = next((d for d in drafts if d["id"] == draft_id), None)
-        if draft is None:
-            raise HTTPException(404, "Bug not found")
-
-        result = jira_client.push_issue(session_dir, draft)
-        draft["status"] = "pushed"
-        draft["jira_key"] = result["key"]
-        draft["jira_url"] = result.get("url", "")  # mock: empty
-        drafts_file.write_text(json.dumps(drafts, ensure_ascii=False, indent=2), encoding="utf-8")
+        drafts_file, drafts, draft = _load_draft(session_dir, draft_id)
+        v = _get_version(draft, ver)
+        flat = _version_view(session_dir, draft, ver)  # issue + screenshots + video_clip for Jira
+        result = jira_client.push_issue(session_dir, flat)
+        v["status"] = "pushed"
+        v["jira_key"] = result["key"]
+        v["jira_url"] = result.get("url", "")  # mock: empty
+        _write_drafts(drafts_file, drafts)
     ws_manager.notify()
     return result
 

@@ -31,7 +31,11 @@ def session_with_mark(tmp_path, monkeypatch):
 
 
 def _shots(d):
-    return json.loads((d / "drafts.json").read_text(encoding="utf-8"))[0]["screenshots"]
+    """Screenshots of the bug's default version (swap normalizes the legacy draft to versioned)."""
+    draft = json.loads((d / "drafts.json").read_text(encoding="utf-8"))[0]
+    if "versions" in draft:
+        return draft["versions"][draft.get("default_ver", 0)]["screenshots"]
+    return draft["screenshots"]
 
 
 def test_apply_then_rollback_is_reversible_and_keeps_both_files(session_with_mark):

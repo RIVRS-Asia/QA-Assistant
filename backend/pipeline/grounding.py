@@ -36,7 +36,10 @@ def locate_bug(image_path, description: str) -> list[int] | None:
                 BOX_PROMPT.format(description=description),
                 types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
             ],
-            config=types.GenerateContentConfig(response_mime_type="application/json"),
+            # temperature=0: grounding must be deterministic - same image+description should always
+            # give the same (highest-confidence) box. The default temperature re-rolls a different,
+            # often worse box on every call, which made reprocess randomly move the annotation.
+            config=types.GenerateContentConfig(response_mime_type="application/json", temperature=0),
         )
         return _pad_box(_parse_box(resp.text or ""))
     except Exception as e:
