@@ -41,5 +41,8 @@ JIRA_BASE_URL = os.getenv("JIRA_BASE_URL", "")
 JIRA_EMAIL = os.getenv("JIRA_EMAIL", "")
 JIRA_API_TOKEN = os.getenv("JIRA_API_TOKEN", "")
 JIRA_PROJECT_KEY = os.getenv("JIRA_PROJECT_KEY", "")
+# Every pushed issue gets this label so QA-Assistant issues are easy to find/bulk-delete:
+#   JQL: project = ROG AND labels = qa-assistant
+JIRA_LABEL = os.getenv("JIRA_LABEL", "qa-assistant")
 
 JIRA_ENABLED = bool(JIRA_BASE_URL and JIRA_API_TOKEN and JIRA_PROJECT_KEY)

@@ -72,8 +72,12 @@ def _build_fields(issue: dict) -> dict:
     }
     if issue.get("priority"):
         fields["priority"] = {"name": issue["priority"]}
-    if issue.get("labels"):
-        fields["labels"] = issue["labels"]
+    # Jira labels can't contain spaces; always add the tool label so every pushed
+    # issue is trackable/deletable via JQL `labels = qa-assistant`.
+    labels = [str(l).strip().replace(" ", "-") for l in (issue.get("labels") or []) if l]
+    if config.JIRA_LABEL and config.JIRA_LABEL not in labels:
+        labels.append(config.JIRA_LABEL)
+    fields["labels"] = labels
     return fields
 
 

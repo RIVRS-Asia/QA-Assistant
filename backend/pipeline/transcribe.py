@@ -17,7 +17,9 @@ TRANSCRIBE_PROMPT = (
     "describing a bug while playtesting a Roblox game. "
     "Transcribe EXACTLY what this person said in Vietnamese or English. "
     "Keep game/English terminology as-is (e.g. spawn, lag, NPC, respawn). "
-    "Return only the transcript content, no additional explanation."
+    "Return only the transcript content, no additional explanation. "
+    "If the audio contains no speech (silence, breathing, or game sounds only), return an empty response - "
+    "do NOT invent words that were not clearly spoken."
 )
 
 
