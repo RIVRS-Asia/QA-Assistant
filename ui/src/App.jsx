@@ -82,15 +82,40 @@ function FullApp() {
   )
 }
 
+const PAGE_SIZE = 10
+
+function usePage(items) {
+  const [page, setPage] = useState(1)
+  const pageCount = Math.max(1, Math.ceil(items.length / PAGE_SIZE))
+  const p = Math.min(page, pageCount)  // clamp when the list shrinks under us
+  const slice = items.slice((p - 1) * PAGE_SIZE, p * PAGE_SIZE)
+  return { slice, page: p, pageCount, setPage }
+}
+
+function Pager({ page, pageCount, setPage }) {
+  if (pageCount <= 1) return null
+  return (
+    <div className="pager">
+      <button disabled={page <= 1} onClick={() => setPage(page - 1)}>← Back</button>
+      {Array.from({ length: pageCount }, (_, i) => i + 1).map((n) => (
+        <button key={n} className={n === page ? 'pg-active' : ''} onClick={() => setPage(n)}>{n}</button>
+      ))}
+      <button disabled={page >= pageCount} onClick={() => setPage(page + 1)}>Next →</button>
+    </div>
+  )
+}
+
 function Home({ sessions, bugs }) {
   const navigate = useNavigate()
+  const bp = usePage(bugs)
+  const sp = usePage(sessions)
   return (
     <>
       {/* Bugs table (global) */}
       <div className="panel">
         <h2>Bugs</h2>
         {bugs.length === 0 && <p className="muted">No bugs yet. Start a session and press the hotkey when you encounter a bug — bugs will appear here automatically.</p>}
-        {bugs.map((b) => (
+        {bp.slice.map((b) => (
           <div key={`${b.session_id}-${b.id}`} className="session-row"
                onClick={() => navigate(`/sessions/${b.session_id}/bugs/${b.id}`)}>
             <span>{b.type === 'capture' ? '📷' : '📹'} {b.title || '(no title yet)'}{b.image_count > 1 ? ` (${b.image_count} images)` : ''}</span>
@@ -100,19 +125,21 @@ function Home({ sessions, bugs }) {
               : <span className="status status-recorded">draft</span>}
           </div>
         ))}
+        <Pager page={bp.page} pageCount={bp.pageCount} setPage={bp.setPage} />
       </div>
 
       {/* Sessions table */}
       <div className="panel">
         <h2>Sessions</h2>
         {sessions.length === 0 && <p className="muted">No sessions yet.</p>}
-        {sessions.map((s) => (
+        {sp.slice.map((s) => (
           <div key={s.id} className="session-row" onClick={() => navigate(`/sessions/${s.id}`)}>
             <b>{fmtSession(s.id)}</b>
             <span>{s.draft_count} bug</span>
             <span className={`status status-${s.status}`}>{s.status}</span>
           </div>
         ))}
+        <Pager page={sp.page} pageCount={sp.pageCount} setPage={sp.setPage} />
       </div>
     </>
   )

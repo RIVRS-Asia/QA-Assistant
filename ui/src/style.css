@@ -34,6 +34,10 @@ kbd { background: #262b35; border: 1px solid #353c49; border-radius: 4px; paddin
 .session-row { display: flex; align-items: center; gap: 10px; justify-content: space-between; padding: 10px 12px; border: 1px solid #262b35; border-radius: 8px; margin-bottom: 8px; cursor: pointer; }
 .session-row:hover { background: #1e222b; }
 
+.pager { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+.pager button { padding: 6px 12px; font-size: 13px; }
+.pager button.pg-active { background: #2dd4a7; color: #08251c; border-color: #2dd4a7; font-weight: 600; }
+
 /* Inline "merge into previous bug" action — must read as a button, not muted text */
 .merge-btn {
   flex-shrink: 0;

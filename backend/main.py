@@ -614,15 +614,21 @@ def stop_session():
 
 # ---------- sessions & drafts ----------
 
+def _paginate(items: list, page: int, page_size: int) -> dict:
+    total = len(items)
+    start = (page - 1) * page_size
+    return {"items": items[start:start + page_size], "total": total, "page": page, "page_size": page_size}
+
+
 @app.get("/api/sessions")
-def list_sessions():
-    return _sessions_payload()
+def list_sessions(page: int = 1, page_size: int = 10):
+    return _paginate(_sessions_payload(), page, page_size)
 
 
 @app.get("/api/bugs")
-def list_bugs():
+def list_bugs(page: int = 1, page_size: int = 10):
     """All bugs (processed drafts) from all sessions - one row per bug for the Bugs table."""
-    return _bugs_payload()
+    return _paginate(_bugs_payload(), page, page_size)
 
 
 def _find_inflight_group(session_id: str, bug_id: int):
