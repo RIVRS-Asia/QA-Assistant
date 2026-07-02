@@ -77,6 +77,24 @@ class ObsController:
                 time.sleep(0.1)
         raise RuntimeError("OBS did not return a replay clip after 5s.")
 
+    def screenshot(self, out_path) -> str:
+        """Instant screenshot of the current program scene (native resolution) -> out_path.
+        Used so a capture press shows its image immediately, without waiting for the replay clip."""
+        if not self.is_connected():
+            raise RuntimeError("Could not connect to OBS.")
+        with self._lock:
+            resp = self._client.get_current_program_scene()
+            scene = getattr(resp, "current_program_scene_name", None) or resp.scene_name
+            # send() directly: the lib helper always includes imageWidth/imageHeight, which
+            # obs-websocket rejects when null; omitting them keeps the source's full resolution.
+            self._client.send("SaveSourceScreenshot", {
+                "sourceName": scene,
+                "imageFormat": "jpg",
+                "imageFilePath": str(out_path),
+                "imageCompressionQuality": 95,
+            })
+        return out_path.name
+
     def _last_replay_path(self) -> str:
         try:
             return self._client.get_last_replay_buffer_replay().saved_replay_path

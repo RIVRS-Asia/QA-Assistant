@@ -1,4 +1,4 @@
-"""Vietnamese transcription - runs 2 engines in parallel for comparison:
+"""Vietnamese/English transcription - runs 2 engines in parallel for comparison:
 
 1. Gemini Flash: multimodal LLM, understands context so it handles regional accents +
    game terminology better.
@@ -13,9 +13,9 @@ import requests
 import config
 
 TRANSCRIBE_PROMPT = (
-    "This is an audio recording of a Vietnamese QA tester (may speak Northern/Central/Southern accent) "
+    "This is an audio recording of a Vietnamese or English QA tester (may speak Northern/Central/Southern accent) "
     "describing a bug while playtesting a Roblox game. "
-    "Transcribe EXACTLY what this person said in Vietnamese. "
+    "Transcribe EXACTLY what this person said in Vietnamese or English. "
     "Keep game/English terminology as-is (e.g. spawn, lag, NPC, respawn). "
     "Return only the transcript content, no additional explanation."
 )

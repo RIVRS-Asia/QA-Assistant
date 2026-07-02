@@ -347,6 +347,8 @@ def _row_from_group(session_id: str, g: dict) -> dict:
     pressed (status 'open' = capturing) and flips to 'processing' once the bug is ended (Alt+E)."""
     with g["lock"]:
         shots = [s for p in sorted(g["parts"], key=lambda p: p["part"]) for s in (p.get("screenshots") or [])]
+        # instant screenshots taken at press time, before their part's clip has landed
+        shots += [s for s in g.get("early_shots", []) if s not in shots]
         ready = len(g["parts"])
     return {
         "session_id": session_id,
@@ -416,8 +418,19 @@ def _open_group(marker_type: str) -> dict:
 
 def _capture_part(session_dir: Path, group: dict, bug_id: int, part_idx: int,
                   marker_type: str, is_append: bool):
-    """Thread for one press: [wait POST if record] -> save clip -> process -> store as a part.
-    Beeps on success / error so the tester knows the data actually landed."""
+    """Thread for one press: [instant screenshot if capture] -> wait POST -> save clip ->
+    process -> store as a part. Beeps on success / error so the tester knows the data landed."""
+    shot = None
+    if marker_type == "capture":
+        # Grab the frame NOW via OBS so the panel/detail shows the image immediately;
+        # the replay clip (saved POST seconds later) is only needed for the audio.
+        try:
+            shot = obs.screenshot(session_dir / f"bug{bug_id}_{part_idx}.jpg")
+            with group["lock"]:
+                group.setdefault("early_shots", []).append(shot)
+            ws_manager.notify()
+        except Exception as e:
+            print(f"[bug {bug_id}.{part_idx}] instant screenshot error: {e}")  # fall back to clip frame
     time.sleep(config.RECORD_POST_SECONDS)  # wait so the clip includes POST seconds after the press (record + capture)
     try:
         clip_path = obs.save_replay_buffer()
@@ -436,7 +449,7 @@ def _capture_part(session_dir: Path, group: dict, bug_id: int, part_idx: int,
         "clip_path": clip_path, "epoch": time.time(),
     })
     try:
-        marker = {"type": marker_type, "clip_path": clip_path}
+        marker = {"type": marker_type, "clip_path": clip_path, "screenshot": shot}
         part = process_session.capture_part(session_dir, bug_id, part_idx, marker)
         with group["lock"]:
             group["parts"].append(part)
@@ -627,6 +640,7 @@ def _partial_bug(group: dict) -> dict:
     placeholder; `processing=True` tells the UI to keep refreshing until the real draft lands."""
     with group["lock"]:
         parts = sorted(group["parts"], key=lambda p: p["part"])
+        early_shots = list(group.get("early_shots", []))
     screenshots, audios, video_clip = [], [], None
     for p in parts:
         screenshots.extend(p.get("screenshots") or [])
@@ -634,6 +648,8 @@ def _partial_bug(group: dict) -> dict:
             audios.append(p["audio"])
         if p.get("video_clip") and video_clip is None:
             video_clip = p["video_clip"]
+    # instant screenshots whose part (clip/audio) hasn't landed yet
+    screenshots += [s for s in early_shots if s not in screenshots]
     return {
         "id": group["bug_id"], "type": group["type"],
         "video_clip": video_clip, "screenshots": screenshots, "audios": audios,

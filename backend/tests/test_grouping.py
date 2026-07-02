@@ -50,9 +50,14 @@ def fast_env(tmp_path, monkeypatch):
         Path(out_path).write_bytes(b"wav")
         return Path(out_path)
 
-    def fake_frame(clip_path, out_path):
+    def fake_frame(clip_path, out_path, seconds_from_end=1):
         Path(out_path).write_bytes(b"jpg")
         return Path(out_path).name
+
+    def fake_shot(out_path):
+        Path(out_path).write_bytes(b"jpg")
+        return Path(out_path).name
+    monkeypatch.setattr(main.obs, "screenshot", fake_shot)
 
     def fake_video(clip_path, out_path, seconds):
         Path(out_path).write_bytes(b"mp4")
@@ -93,15 +98,16 @@ def test_one_capture_then_two_appends_make_one_bug_with_three_images(fast_env):
 
     bugs = _wait_drafts(session_dir, 1)
     bug0 = next(b for b in bugs if b["id"] == 0)
-    assert len(bug0["screenshots"]) == 3, bug0["screenshots"]
-    assert len(set(bug0["screenshots"])) == 3   # distinct filenames, no overwrite
-    assert "gemini" in bug0["transcripts"]
-    assert bug0["transcripts"]["gemini"].count("mô tả bug") == 3  # 3 parts concatenated
+    assert len(bug0["base_screenshots"]) == 3, bug0["base_screenshots"]
+    assert len(set(bug0["base_screenshots"])) == 3   # distinct filenames, no overwrite
+    transcripts = bug0["versions"][0]["transcripts"]
+    assert "gemini" in transcripts
+    assert transcripts["gemini"].count("mô tả bug") == 3  # 3 parts concatenated
 
     main.stop_session()
     bugs = _wait_drafts(session_dir, 2)          # second bug finalized on stop
     assert {b["id"] for b in bugs} == {0, 1}
-    assert len(next(b for b in bugs if b["id"] == 1)["screenshots"]) == 1
+    assert len(next(b for b in bugs if b["id"] == 1)["base_screenshots"]) == 1
 
 
 def test_append_with_no_open_bug_starts_a_new_bug(fast_env):
@@ -113,7 +119,41 @@ def test_append_with_no_open_bug_starts_a_new_bug(fast_env):
 
     bugs = _wait_drafts(session_dir, 1)
     assert len(bugs) == 1
-    assert len(bugs[0]["screenshots"]) == 1
+    assert len(bugs[0]["base_screenshots"]) == 1
+
+
+def test_capture_press_shows_image_instantly(fast_env, monkeypatch):
+    """The panel thumb + detail page must have the screenshot right after the press,
+    while the replay clip (audio) is still pending."""
+    import threading
+
+    def fake_shot(out_path):
+        Path(out_path).write_bytes(b"jpg")
+        return Path(out_path).name
+    monkeypatch.setattr(main.obs, "screenshot", fake_shot)
+
+    gate = threading.Event()  # holds the clip save so the part can't finish yet
+    clip_save = main.obs.save_replay_buffer
+
+    def slow_save():
+        gate.wait(5)
+        return clip_save()
+    monkeypatch.setattr(main.obs, "save_replay_buffer", slow_save)
+
+    main.start_session()
+    main._on_marker("capture")
+
+    thumb = None
+    deadline = time.time() + 2
+    while time.time() < deadline and not thumb:
+        rows = main._inflight_payload()
+        thumb = rows[0]["thumb"] if rows else None
+        time.sleep(0.02)
+    assert thumb == "bug0_0.jpg"                      # image visible before the clip landed
+    assert main._partial_bug(main.active_session["group"])["screenshots"] == ["bug0_0.jpg"]
+
+    gate.set()
+    main.stop_session()
 
 
 def test_failed_clip_save_is_recorded_not_dropped(fast_env, monkeypatch):
