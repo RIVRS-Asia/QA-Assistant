@@ -37,9 +37,6 @@ if not exist ".venv\Scripts\python.exe" (
 REM auto-launch OBS with the QA-Assistant profile/scene + replay buffer running
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0start-obs.ps1"
 
-REM open the browser shortly after the server starts
-start "" /min cmd /c "ping -n 3 127.0.0.1 >nul & start http://localhost:8000"
-
-echo Starting QA Assistant on http://localhost:8000  (Ctrl+C to stop)
-".venv\Scripts\python.exe" -m uvicorn main:app --port 8000 > "%~dp0run.log" 2>&1
+echo Starting QA Assistant panel (http://localhost:8000) - close the panel window to stop.
+".venv\Scripts\python.exe" panel.py > "%~dp0run.log" 2>&1
 pause

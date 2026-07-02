@@ -1,4 +1,6 @@
 .env
+jira_settings.json
+backend/jira_settings.json
 sessions/
 __pycache__/
 *.pyc

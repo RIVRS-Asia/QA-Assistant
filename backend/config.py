@@ -14,10 +14,12 @@ SESSIONS_DIR.mkdir(exist_ok=True)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
-GROQ_WHISPER_MODEL = os.getenv("GROQ_WHISPER_MODEL", "whisper-large-v3")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
-OPENAI_WHISPER_MODEL = os.getenv("OPENAI_WHISPER_MODEL", "whisper-1")
+# Models are managed centrally here (NOT read from .env) so `git pull` alone rolls out
+# a model change to every client - .env only holds machine-specific secrets (API keys).
+GEMINI_MODEL = "gemini-2.5-pro"
+GROQ_WHISPER_MODEL = "whisper-large-v3"
+OPENAI_MODEL = "gpt-4o"
+OPENAI_WHISPER_MODEL = "whisper-1"
 
 # OBS WebSocket
 OBS_HOST = os.getenv("OBS_HOST", "localhost")
@@ -28,6 +30,7 @@ OBS_PASSWORD = os.getenv("OBS_PASSWORD", "")
 RECORD_HOTKEY = os.getenv("RECORD_HOTKEY", "ctrl+shift+f9")  # NEW bug with video clip
 CAPTURE_HOTKEY = os.getenv("CAPTURE_HOTKEY", "alt+b")    # NEW bug with screenshot  (B = Bug)
 APPEND_HOTKEY = os.getenv("APPEND_HOTKEY", "alt+a")      # add screenshot to OPEN bug  (A = Append)
+END_HOTKEY = os.getenv("END_HOTKEY", "alt+e")            # end OPEN bug -> process with AI  (E = End)
 MIC_AUDIO_STREAM = int(os.getenv("MIC_AUDIO_STREAM", "0"))
 
 # Record clip = PRE seconds before + POST seconds after the press. OBS Max Replay Time must be >= PRE+POST.
@@ -40,5 +43,8 @@ JIRA_BASE_URL = os.getenv("JIRA_BASE_URL", "")
 JIRA_EMAIL = os.getenv("JIRA_EMAIL", "")
 JIRA_API_TOKEN = os.getenv("JIRA_API_TOKEN", "")
 JIRA_PROJECT_KEY = os.getenv("JIRA_PROJECT_KEY", "")
+# Every pushed issue gets this label so QA-Assistant issues are easy to find/bulk-delete:
+#   JQL: project = ROG AND labels = qa-assistant
+JIRA_LABEL = os.getenv("JIRA_LABEL", "qa-assistant")
 
 JIRA_ENABLED = bool(JIRA_BASE_URL and JIRA_API_TOKEN and JIRA_PROJECT_KEY)

@@ -41,12 +41,12 @@ export default function SessionDetail() {
         <div key={d.id} className="session-row">
           <span style={{ cursor: 'pointer', flex: 1 }} onClick={() => navigate(`/sessions/${id}/bugs/${d.id}`)}>
             {d.type === 'capture' ? '📷' : '📹'} Bug #{d.id + 1} — {d.issue?.title || '(no title yet)'}
-            {(d.screenshots?.length || 0) > 1 ? ` (${d.screenshots.length} ảnh)` : ''}
+            {(d.screenshots?.length || 0) > 1 ? ` (${d.screenshots.length} images)` : ''}
           </span>
           {/* merge into the previous bug - safety net for a bug that was split by mistake */}
           {i > 0 && d.status !== 'pushed' && (
-            <button className="merge-btn" title={`Gộp vào Bug #${drafts[i - 1].id + 1}`}
-                    onClick={() => merge(d.id, drafts[i - 1].id)}>⤴ gộp vào #{drafts[i - 1].id + 1}</button>
+            <button className="merge-btn" title={`Merge into Bug #${drafts[i - 1].id + 1}`}
+                    onClick={() => merge(d.id, drafts[i - 1].id)}>⤴ merge into #{drafts[i - 1].id + 1}</button>
           )}
           {d.status === 'pushed'
             ? <span className="status status-done">✓ {d.jira_key}</span>

@@ -11,10 +11,11 @@ transcripts concatenated, and the LLM writes ONE draft issue from the combined t
 Every step is best-effort: on error (missing ffmpeg / API key) values are left empty but the
 part/bug is never dropped - bugs are always written as drafts.
 """
+import time
 from pathlib import Path
 
 import config
-from pipeline import media, transcribe, issue_writer
+from pipeline import media, transcribe, issue_writer, grounding
 
 
 def capture_part(session_dir: Path, bug_id: int, part_idx: int, marker: dict) -> dict:
@@ -38,7 +39,11 @@ def capture_part(session_dir: Path, bug_id: int, part_idx: int, marker: dict) ->
     screenshots = []
     try:
         if marker_type == "capture":
-            screenshots = [media.extract_frame(clip_path, session_dir / f"{stem}.jpg", config.RECORD_POST_SECONDS)]
+            shot = marker.get("screenshot")  # instant OBS screenshot taken at press time
+            if shot and (session_dir / shot).exists():
+                screenshots = [shot]
+            else:  # fallback: pull the press-moment frame out of the replay clip
+                screenshots = [media.extract_frame(clip_path, session_dir / f"{stem}.jpg", config.RECORD_POST_SECONDS)]
         else:  # record
             video_clip = media.save_video_clip(clip_path, session_dir / f"{stem}.mp4", window)
     except Exception as e:
@@ -67,9 +72,74 @@ def _merge_transcripts(parts: list[dict]) -> dict:
     return {engine: "\n".join(texts) for engine, texts in merged.items()}
 
 
-def finalize_bug(bug_id: int, group_type: str, parts: list[dict]) -> dict:
+def _first_transcript(transcripts: dict) -> str:
+    """Best available raw transcript text (VN localization may have spatial cues like 'upper right corner'),
+    skipping engine error markers ('[gemini error: ...]')."""
+    for engine in ("gemini", "openai", "groq"):
+        text = (transcripts.get(engine) or "").strip()
+        if text and not text.startswith("["):
+            return text
+    return ""
+
+
+def _auto_annotate(bug_id: int, screenshots: list[str], transcripts: dict, session_dir: Path,
+                   tag: str = "") -> list[dict]:
+    """For each screenshot, ask Gemini where the bug is and burn a red box onto a *copy*. Best-effort:
+    returns [{src, marked, box}] suggestions for the UI to show; never touches the original frame.
+    `tag` is appended to the marked filename so reprocess versions don't overwrite each other's boxes."""
+    description = _first_transcript(transcripts)
+    marks = []
+    for shot in screenshots:
+        try:
+            box = grounding.locate_bug(session_dir / shot, description)
+            if not box:
+                continue
+            marked = media.draw_box(session_dir / shot, box, session_dir / f"{Path(shot).stem}_marked{tag}.png")
+            marks.append({"src": shot, "marked": marked, "box": box})
+        except Exception as e:
+            print(f"[bug {bug_id}] auto-annotate {shot} failed: {e}")
+    return marks
+
+
+def _new_version(ver: int, transcripts: dict, issue: dict, auto_marks: list[dict],
+                 screenshots: list[str]) -> dict:
+    """One result version: the parts that reprocess regenerates. Caller stamps created_at /
+    transcript_edited. Media (audios/video/base_screenshots) lives on the bug, shared across versions."""
+    return {
+        "ver": ver,
+        "transcripts": transcripts,
+        "transcript_edited": False,
+        "issue": issue,
+        "auto_marks": auto_marks,       # [{src, marked, box}] AI bug-region suggestions (QA confirms via UI)
+        "screenshots": list(screenshots),
+        "status": "draft",              # draft -> pushed (workflow states)
+        "jira_key": "",
+        "jira_url": "",
+        "created_at": time.time(),
+    }
+
+
+def reprocess_bug(bug_id: int, base_screenshots: list[str], transcripts: dict,
+                  session_dir: Path, ver: int, prev_marks: list[dict] | None = None,
+                  reground: bool = True) -> dict:
+    """Re-run the AI on existing media (no re-record, no re-transcribe): always write a fresh issue
+    from `transcripts`, returning a new version dict (ver >= 1).
+
+    Grounding only re-runs when `reground` (the QA edited the transcript). When the transcript is
+    unchanged, re-grounding is pointless - with temperature=0 it returns the same box - so we just
+    carry over `prev_marks`, which also avoids the old behaviour of a re-roll randomly moving the box."""
+    issue = issue_writer.write_issue(transcripts)
+    if reground:
+        auto_marks = _auto_annotate(bug_id, base_screenshots, transcripts, session_dir, tag=f"_v{ver}")
+    else:
+        auto_marks = [dict(m) for m in (prev_marks or [])]  # reuse the existing boxes/marked files
+    return _new_version(ver, transcripts, issue, auto_marks, base_screenshots)
+
+
+def finalize_bug(bug_id: int, group_type: str, parts: list[dict], session_dir: Path | None = None) -> dict:
     """Assemble all parts of a bug into ONE draft: collect screenshots/audios, concatenate
-    transcripts, and call the LLM once. parts must be ordered by part index."""
+    transcripts, call the LLM once, and (when session_dir is given) auto-suggest a bug-region box
+    per screenshot. parts must be ordered by part index."""
     screenshots: list[str] = []
     audios: list[str] = []
     video_clip = None
@@ -82,14 +152,16 @@ def finalize_bug(bug_id: int, group_type: str, parts: list[dict]) -> dict:
 
     transcripts = _merge_transcripts(parts)
     issue = issue_writer.write_issue(transcripts)
+    auto_marks = _auto_annotate(bug_id, screenshots, transcripts, session_dir) if session_dir else []
 
+    # Versioned shape: media (audios/video/base_screenshots) is shared; each reprocess appends a
+    # new version. v0 is this first AI pass. See _normalize_draft in main.py for the legacy shim.
     return {
         "id": bug_id,
         "type": group_type,
         "video_clip": video_clip,
-        "screenshots": screenshots,
         "audios": audios,
-        "transcripts": transcripts,
-        "issue": issue,
-        "status": "draft",  # draft -> pushed (workflow states)
+        "base_screenshots": list(screenshots),  # original frames, source for reprocess grounding
+        "default_ver": 0,
+        "versions": [_new_version(0, transcripts, issue, auto_marks, screenshots)],
     }
