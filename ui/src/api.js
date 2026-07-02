@@ -25,6 +25,9 @@ export const api = {
   stopSession: () => request('/session/stop', { method: 'POST' }),
   listSessions: () => request('/sessions'),
   listBugs: () => request('/bugs'),
+  getJiraSettings: () => request('/jira/settings'),
+  listJiraProjects: () => request('/jira/projects'),
+  saveJiraSettings: (s) => request('/jira/settings', { method: 'PUT', body: JSON.stringify(s) }),
   getSession: (id) => request(`/sessions/${id}`),
   // ver (optional) selects a result version; omitted -> the bug's default version
   getBug: (id, bugId, ver) => request(`/sessions/${id}/bugs/${bugId}${ver == null ? '' : `?ver=${ver}`}`),

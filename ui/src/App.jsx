@@ -50,8 +50,16 @@ function FullApp() {
           <Dot ok={status?.asr_engines?.gemini} label="Gemini" />
           <Dot ok={status?.asr_engines?.groq} label="Groq" />
           <Dot ok={status?.asr_engines?.openai} label="OpenAI" />
-          <span className="muted">Jira: {status?.jira_mode}</span>
+          <span className={`project-card${status?.jira_project ? '' : ' unset'}`}>
+            🎯 {status?.jira_project || 'No project — set in Jira settings'}
+          </span>
         </div>
+
+        <JiraSettings />
+
+        {status?.recording && status?.session_project && (
+          <p className="muted">This session pushes to project <b>{status.session_project}</b>.</p>
+        )}
 
         {status?.recording ? (
           <div className="recording">
@@ -118,7 +126,7 @@ function Home({ sessions, bugs }) {
         {bp.slice.map((b) => (
           <div key={`${b.session_id}-${b.id}`} className="session-row"
                onClick={() => navigate(`/sessions/${b.session_id}/bugs/${b.id}`)}>
-            <span>{b.type === 'capture' ? '📷' : '📹'} {b.title || '(no title yet)'}{b.image_count > 1 ? ` (${b.image_count} images)` : ''}</span>
+            <span className="row-title">{b.type === 'capture' ? '📷' : '📹'} {b.title || '(no title yet)'}{b.image_count > 1 ? ` (${b.image_count} images)` : ''}</span>
             <span className="muted">{fmtSession(b.session_id)}</span>
             {b.status === 'pushed'
               ? <span className="status status-done">✓ {b.jira_key}</span>
@@ -142,6 +150,61 @@ function Home({ sessions, bugs }) {
         <Pager page={sp.page} pageCount={sp.pageCount} setPage={sp.setPage} />
       </div>
     </>
+  )
+}
+
+// Paste Jira + project info, verify against Jira, save. New sessions push to whatever is saved here.
+function JiraSettings() {
+  const [open, setOpen] = useState(false)
+  const [s, setS] = useState({ base_url: '', email: '', project_key: '' })
+  const [projects, setProjects] = useState(null)  // null = loading, [] = none/error
+  const [msg, setMsg] = useState(null)             // { ok, text }
+
+  useEffect(() => { api.getJiraSettings().then(setS).catch(() => {}) }, [])
+
+  // Load the project list from Jira when the modal opens.
+  useEffect(() => {
+    if (!open) return
+    setProjects(null); setMsg(null)
+    api.listJiraProjects()
+      .then(setProjects)
+      .catch((e) => { setProjects([]); setMsg({ ok: false, text: e.message }) })
+  }, [open])
+
+  const pick = async (project_key) => {
+    if (!project_key) return
+    try {
+      const r = await api.saveJiraSettings({ project_key })
+      setS(r)
+      setMsg({ ok: true, text: `Now pushing to ${r.project_key}` })
+    } catch (e) {
+      setMsg({ ok: false, text: e.message })
+    }
+  }
+
+  return (
+    <div className="jira-settings">
+      <button onClick={() => setOpen(true)}>⚙ Jira settings</button>
+      {open && (
+        <div className="modal-overlay" onClick={() => setOpen(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h3>Jira settings</h3>
+              <button className="qp-win" onClick={() => setOpen(false)}>✕</button>
+            </div>
+            <p className="muted">Connected to <b>{s.base_url || '(set in .env)'}</b> as {s.email || '(set in .env)'}.</p>
+            {projects === null
+              ? <p className="muted">Loading projects…</p>
+              : <select className="modal-select" value={s.project_key} onChange={(e) => pick(e.target.value)}>
+                  <option value="" disabled>Select a project…</option>
+                  {projects.map((p) => <option key={p.key} value={p.key}>{p.key} — {p.name}</option>)}
+                </select>}
+            {msg && <p className={msg.ok ? 'ok-banner' : 'error'}>{msg.text}</p>}
+            <p className="muted">Pick the project before starting a new session to test a different game. Running sessions keep the project they started with.</p>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 

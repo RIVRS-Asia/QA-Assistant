@@ -25,6 +25,7 @@ from fastapi.responses import FileResponse
 import config
 import feedback
 import jira_client
+import jira_settings
 from hotkey_listener import HotkeyListener
 from obs_controller import ObsController
 from pipeline import process_session
@@ -295,7 +296,10 @@ def _status_payload() -> dict:
             "groq": bool(config.GROQ_API_KEY),
             "openai": bool(config.OPENAI_API_KEY),
         },
-        "jira_mode": "real" if config.JIRA_ENABLED else "mock",
+        "jira_mode": "real" if jira_settings.enabled() else "mock",
+        "jira_project": jira_settings.get()["project_key"],
+        # the project THIS running session will push to (locked in at start)
+        "session_project": active_session.get("project_key") if active_session else None,
     }
 
 
@@ -395,6 +399,33 @@ def _build_snapshot() -> dict:
 @app.get("/api/status")
 def status():
     return _status_payload()
+
+
+# ---------- jira settings ----------
+
+@app.get("/api/jira/settings")
+def get_jira_settings():
+    return jira_settings.public()
+
+
+@app.get("/api/jira/projects")
+def list_jira_projects():
+    """Bug-capable projects on the configured Jira site, for the settings dropdown."""
+    try:
+        return jira_settings.list_projects()
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.put("/api/jira/settings")
+def save_jira_settings(body: dict):
+    """Persist the chosen project (from the dropdown - already known to exist). New sessions push to it."""
+    try:
+        jira_settings.set_project(body.get("project_key"))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    ws_manager.notify()  # refresh jira_project in the UI status bar
+    return jira_settings.public()
 
 
 # ---------- session control ----------
@@ -562,12 +593,14 @@ def start_session():
     session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
     session_dir = config.SESSIONS_DIR / session_id
     session_dir.mkdir(parents=True, exist_ok=True)
+    project_key = jira_settings.get()["project_key"]  # lock in the project for this whole session
     _save_meta(session_dir, {
         "id": session_id, "started_at": time.time(),
-        "markers": [], "status": "recording",
+        "markers": [], "status": "recording", "jira_project": project_key,
     })
 
-    active_session = {"id": session_id, "next_id": 0, "pending": [], "group": None, "processing": []}
+    active_session = {"id": session_id, "next_id": 0, "pending": [], "group": None,
+                      "processing": [], "project_key": project_key}
     while not _marker_queue.empty():  # drop any presses left over from a previous session
         try:
             _marker_queue.get_nowait()
@@ -869,7 +902,11 @@ def push_draft(session_id: str, draft_id: int, ver: int | None = None):
         drafts_file, drafts, draft = _load_draft(session_dir, draft_id)
         v = _get_version(draft, ver)
         flat = _version_view(session_dir, draft, ver)  # issue + screenshots + video_clip for Jira
-        result = jira_client.push_issue(session_dir, flat)
+        project_key = _load_meta(session_dir).get("jira_project")  # the project this session was bound to
+        try:
+            result = jira_client.push_issue(session_dir, flat, project_key)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
         v["status"] = "pushed"
         v["jira_key"] = result["key"]
         v["jira_url"] = result.get("url", "")  # mock: empty

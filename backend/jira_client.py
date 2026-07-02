@@ -9,12 +9,16 @@ from pathlib import Path
 import requests
 
 import config
+import jira_settings
 
 
-def push_issue(session_dir: Path, draft: dict) -> dict:
-    if config.JIRA_ENABLED:
-        return _push_real(session_dir, draft)
-    return _push_mock(session_dir, draft)
+def push_issue(session_dir: Path, draft: dict, project_key: str | None = None) -> dict:
+    """project_key: the project this session is bound to (captured at session start).
+    Falls back to the current setting; mock mode when Jira isn't configured."""
+    project_key = project_key or jira_settings.get()["project_key"]
+    if jira_settings.enabled():
+        return _push_real(session_dir, draft, project_key)
+    return _push_mock(session_dir, draft, project_key)
 
 
 def _adf_labeled_block(label: str, text: str) -> dict:
@@ -61,11 +65,11 @@ def _build_description_adf(issue: dict) -> dict:
     return {"type": "doc", "version": 1, "content": content}
 
 
-def _build_fields(issue: dict) -> dict:
+def _build_fields(issue: dict, project_key: str) -> dict:
     """The Jira `fields` payload - shared by real push and mock so the saved file
     mirrors exactly what would be sent to Jira."""
     fields = {
-        "project": {"key": config.JIRA_PROJECT_KEY},
+        "project": {"key": project_key},
         "issuetype": {"name": "Bug"},
         "summary": issue.get("title", ""),
         "description": _build_description_adf(issue),
@@ -81,7 +85,7 @@ def _build_fields(issue: dict) -> dict:
     return fields
 
 
-def _push_mock(session_dir: Path, draft: dict) -> dict:
+def _push_mock(session_dir: Path, draft: dict, project_key: str) -> dict:
     """Mock: append the same `fields` payload we'd POST to Jira, return a fake key."""
     out_file = session_dir / "pushed_issues.json"
     pushed = json.loads(out_file.read_text(encoding="utf-8")) if out_file.exists() else []
@@ -89,7 +93,7 @@ def _push_mock(session_dir: Path, draft: dict) -> dict:
     pushed.append({
         "key": fake_key,
         "pushed_at": datetime.now().isoformat(),
-        "fields": _build_fields(draft["issue"]),
+        "fields": _build_fields(draft["issue"], project_key),
         "video_clip": draft.get("video_clip"),
         "screenshots": draft.get("screenshots", []),
     })
@@ -113,12 +117,13 @@ def _attachment_files(session_dir: Path, draft: dict) -> list[Path]:
 def _upload_attachments(issue_key: str, session_dir: Path, draft: dict):
     """Upload all of the bug's screenshots/video to the Jira issue. Best-effort: a failed
     attachment must not fail the whole push (the issue itself is already created)."""
+    s = jira_settings.get()
     for path in _attachment_files(session_dir, draft):
         try:
             with open(path, "rb") as f:
                 requests.post(
-                    f"{config.JIRA_BASE_URL}/rest/api/3/issue/{issue_key}/attachments",
-                    auth=(config.JIRA_EMAIL, config.JIRA_API_TOKEN),
+                    f"{s['base_url']}/rest/api/3/issue/{issue_key}/attachments",
+                    auth=(s["email"], s["api_token"]),
                     headers={"X-Atlassian-Token": "no-check"},  # required by Jira for attachments
                     files={"file": (path.name, f)},
                     timeout=60,
@@ -127,14 +132,22 @@ def _upload_attachments(issue_key: str, session_dir: Path, draft: dict):
             print(f"[jira] attachment {path.name} failed: {e}")
 
 
-def _push_real(session_dir: Path, draft: dict) -> dict:
+def _push_real(session_dir: Path, draft: dict, project_key: str) -> dict:
+    s = jira_settings.get()
     resp = requests.post(
-        f"{config.JIRA_BASE_URL}/rest/api/3/issue",
-        auth=(config.JIRA_EMAIL, config.JIRA_API_TOKEN),
-        json={"fields": _build_fields(draft["issue"])},
+        f"{s['base_url']}/rest/api/3/issue",
+        auth=(s["email"], s["api_token"]),
+        json={"fields": _build_fields(draft["issue"], project_key)},
         timeout=30,
     )
-    resp.raise_for_status()
+    if not resp.ok:
+        # Surface Jira's own message (permission denied, bad field, ...) instead of a bare 500.
+        try:
+            err = resp.json()
+            msg = "; ".join(err.get("errorMessages", []) + list(err.get("errors", {}).values()))
+        except Exception:
+            msg = resp.text[:200]
+        raise ValueError(f"Jira rejected the issue (HTTP {resp.status_code}) for project {project_key}: {msg}")
     key = resp.json()["key"]
     _upload_attachments(key, session_dir, draft)
-    return {"key": key, "url": f"{config.JIRA_BASE_URL}/browse/{key}", "mock": False}
+    return {"key": key, "url": f"{s['base_url']}/browse/{key}", "mock": False}

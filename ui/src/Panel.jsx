@@ -50,7 +50,7 @@ export default function Panel() {
   return (
     <div className={`qa-panel${collapsed ? ' collapsed' : ''}`}>
       <header className="qp-bar">
-        <span className="qp-title pywebview-drag-region">{recording ? '🔴 REC' : '🎮 QA'}</span>
+        <span className="qp-title pywebview-drag-region">{recording ? `🔴 Recording… · ${total} bug${total !== 1 ? 's' : ''}` : '🎮 QA · idle'}</span>
         <span className="qp-spacer pywebview-drag-region" />
         <button className="qp-win" title={collapsed ? 'Expand' : 'Collapse'} onClick={toggleCollapse}>{collapsed ? '▴' : '▾'}</button>
         {inPywebview() && (

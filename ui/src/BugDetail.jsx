@@ -21,6 +21,8 @@ export default function BugDetail() {
   const [ver, setVer] = useState({})        // cache-bust per filename after annotating
   const [lightbox, setLightbox] = useState(-1)  // open screenshot index, -1 = closed
   const [copied, setCopied] = useState(false)
+  const [pushing, setPushing] = useState(false)   // spinner while POSTing to Jira
+  const [pushOk, setPushOk] = useState(false)      // brief success flash after push
   const imgRefs = useRef({})
   const curVer = draft?.ver  // the actually-resolved version (selVer may be null -> default)
 
@@ -102,11 +104,15 @@ export default function BugDetail() {
   }
 
   const push = async () => {
-    setBusy(true)
-    await api.updateDraft(sessionId, bugId, issue, curVer) // save edits before pushing
-    await api.pushDraft(sessionId, bugId, curVer)
-    setBusy(false)
-    load()
+    setPushing(true); setError('')
+    try {
+      await api.updateDraft(sessionId, bugId, issue, curVer) // save edits before pushing
+      await api.pushDraft(sessionId, bugId, curVer)
+      setPushOk(true)
+      setTimeout(() => setPushOk(false), 4000)
+      await load()
+    } catch (e) { setError(e.message) }
+    setPushing(false)
   }
 
   const copyImage = async (f) => {
@@ -338,10 +344,13 @@ export default function BugDetail() {
 
       {draft.status !== 'pushed' && (
         <div className="row">
-          <button onClick={save} disabled={busy || draft.processing}>💾 Save</button>
-          <button className="start" onClick={push} disabled={busy || draft.processing}>🚀 Push Jira</button>
+          <button onClick={save} disabled={busy || pushing || draft.processing}>💾 Save</button>
+          <button className="start" onClick={push} disabled={busy || pushing || draft.processing}>
+            {pushing ? <><span className="spinner" /> Pushing…</> : '🚀 Push Jira'}
+          </button>
         </div>
       )}
+      {pushOk && <div className="ok-banner">✓ Pushed to Jira successfully.</div>}
     </div>
   )
 }

@@ -14,10 +14,12 @@ SESSIONS_DIR.mkdir(exist_ok=True)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
-GROQ_WHISPER_MODEL = os.getenv("GROQ_WHISPER_MODEL", "whisper-large-v3")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
-OPENAI_WHISPER_MODEL = os.getenv("OPENAI_WHISPER_MODEL", "whisper-1")
+# Models are managed centrally here (NOT read from .env) so `git pull` alone rolls out
+# a model change to every client - .env only holds machine-specific secrets (API keys).
+GEMINI_MODEL = "gemini-2.5-pro"
+GROQ_WHISPER_MODEL = "whisper-large-v3"
+OPENAI_MODEL = "gpt-4o"
+OPENAI_WHISPER_MODEL = "whisper-1"
 
 # OBS WebSocket
 OBS_HOST = os.getenv("OBS_HOST", "localhost")
